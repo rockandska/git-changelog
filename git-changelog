@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -eEuo pipefail
+
+: "${DEBUG:=0}"
+CHANGELOG_PATH=$(git rev-parse --show-toplevel)/CHANGELOG.md
+
+# Conventional commits
+CONVENTIONAL_COMMIT_REGEX="^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\(([[:alnum:]._-]+)\))?(!)?: ([[:alnum:] ]+)([[:space:][:print:]]*)"
+CONVENTIONAL_COMMIT_TO_SHOW=("feat" "fix" "revert" "test")
+
+declare -A COMMIT_TYPE_LIST
+
+debug(){
+	if ((DEBUG));then
+		1>&2 printf 'DEBUG: %s\n' "$@"
+	fi
+}
+
+set_git_infos() {
+	# Git commits
+	GIT_ACTUAL_TAGS=($(git tag --points-at 2> /dev/null))
+	debug "Actuals tags :" "${GIT_ACTUAL_TAGS[@]:-}"
+	GIT_ACTUAL_TAG="${CHANGELOG_TAG:-${GIT_ACTUAL_TAGS[0]:-}}"
+	debug "Actual tag :" "${GIT_ACTUAL_TAG:-}"
+	GIT_PREVIOUS_TAGS=($(git for-each-ref --no-contains=HEAD --sort=-creatordate --format '%(refname)' refs/tags | sed 's/refs\/tags\///'))
+	debug "Previous tags:" "${GIT_PREVIOUS_TAGS[@]}"
+	GIT_PREVIOUS_TAG="${GIT_PREVIOUS_TAGS[0]:-}"
+	debug "Previous tag:" "${GIT_PREVIOUS_TAG}"
+
+	GIT_COMMITS=($(git rev-list "${GIT_PREVIOUS_TAG:-$(git rev-list --max-parents=0 HEAD 2> /dev/null)}.."))
+	debug "Commits list since previous tag ('${GIT_PREVIOUS_TAG}') :" "${GIT_COMMITS[@]}"
+}
+
+set_tpl_vars() {
+	# Used to generate new section in CHANGELOG
+	header_tpl=('%s\n\n' 'CHANGELOG')
+	release_tpl=('%s\n\n' "${GIT_ACTUAL_TAG}")
+	unreleased_tpl=('%s\n\n' 'Unreleased')
+	type_tpl=('%s\n\n' "${type:-}")
+	commit_tpl=('- %s (%.7s)\n' "${COMMIT_DESCRIPTION[${i:-}]:-}" "${GIT_COMMITS[${i:-}]:-}")
+
+	# Used with sed to delete old section in CHANGELOG
+	escaped_header=$(printf "${header_tpl[0]:-}" "${header_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
+	escaped_release=$(printf "${release_tpl[0]:-}" "${release_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
+	escaped_unreleased=$(printf "${unreleased_tpl[0]:-}" "${unreleased_tpl[@]:1}" |	sed	's/[.[\/\*^$]/\\&/g')
+}
+
+
+set_commit_infos() {
+	debug "Loop over commits..."
+	for i in "${!GIT_COMMITS[@]}";do
+		printf -v GIT_SUBJECT[$i] '%s' "$(git log --format='%s' -n 1 "${GIT_COMMITS[$i]}")"
+		printf -v GIT_FOOTER[$i] '%s' "$(git log --format='%(trailers)')"
+		if [[ "${GIT_SUBJECT[$i]}" =~ $CONVENTIONAL_COMMIT_REGEX ]];then
+			debug "OK : conventional commit found in subject : '${GIT_SUBJECT[$i]}' (${GIT_COMMITS[$i]::7})"
+			COMMIT_TYPE[$i]="${BASH_REMATCH[1]}"
+			COMMIT_SCOPE[$i]="${BASH_REMATCH[3]}"
+			COMMIT_DESCRIPTION[$i]="${BASH_REMATCH[5]}"
+			COMMIT_BREAKING[$i]="${BASH_REMATCH[4]}"
+			if [[ -n "${COMMIT_BREAKING[$i]}" ]];then
+				COMMIT_BREAKING_MESSAGE[$i]="${COMMIT_DESCRIPTION[$i]}"
+				COMMIT_TYPE_LIST["BREAKING_CHANGES"]="${COMMIT_TYPE_LIST['BREAKING_CHANGES']} $i"
+			fi
+			COMMIT_TYPE_LIST["${COMMIT_TYPE[$i]}"]="${COMMIT_TYPE_LIST[${COMMIT_TYPE[$i]}]:-} $i"
+		else
+			debug "WARNING : not a conventional commit with subject '${GIT_SUBJECT[$i]}' (${GIT_COMMITS[$i]::7})"
+		fi
+	done
+}
+
+set_changelog_release() {
+	debug "Writing changelog.."
+	set_tpl_vars
+	if [[ -n "${GIT_ACTUAL_TAG}" ]];then
+		printf -v output -- "${output:-}## ${release_tpl[0]}" "${release_tpl[@]:1}"
+	else
+		printf -v output -- "${output:-}## ${unreleased_tpl[0]}" "${unreleased_tpl[@]:1}"
+	fi
+
+	for type in "${CONVENTIONAL_COMMIT_TO_SHOW[@]}";do
+		debug "Processing commit type: $type"
+		if [[ -n "${COMMIT_TYPE_LIST[$type]:-}" ]];then
+			IFS=" " read -a commit_list <<< "${COMMIT_TYPE_LIST[$type]}"
+			debug "commits with type : $type" "${commit_list[@]}"
+			set_tpl_vars
+			printf -v output -- "${output}### ${type_tpl[0]}" "${type_tpl[@]:1}"
+			for i in "${commit_list[@]}";do
+				debug "commit: $i"
+				set_tpl_vars
+				printf -v output -- "${output}${commit_tpl[0]}" "${commit_tpl[@]:1}"
+			done
+			printf -v output -- "${output}\n"
+		else
+			debug "No commit found with type : ${type}"
+		fi
+	done
+}
+
+update_changelog() {
+	touch "${CHANGELOG_PATH}"
+	printf -v output -- "# ${header_tpl[0]}${output}" "${header_tpl[@]:1}"
+	printf -v output -- '%s' "${output}$( \
+		sed -e '$a## ' ${CHANGELOG_PATH} | \
+		sed \
+		-e "/^# ${escaped_header}$/,/^## /{//!d}" \
+		-e "/^# ${escaped_header}$/d" \
+		-e "/^## ${escaped_unreleased}$/,/^## /{//!d}" \
+		-e "/^## ${escaped_unreleased}$/d"  \
+		-e "/^## ${escaped_release}$/,/^## /{//!d}" \
+		-e "/^## ${escaped_release}$/d"  \
+		-e '${/^## $/d;}' \
+	)"
+	echo -n "${output}" > "${CHANGELOG_PATH}"
+}
+
+main() {
+	set_git_infos
+	set_commit_infos
+	set_changelog_release
+	update_changelog
+}
+
+main
