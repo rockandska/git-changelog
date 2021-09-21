@@ -5,7 +5,7 @@ set -eEuo pipefail
 CHANGELOG_PATH=$(git rev-parse --show-toplevel)/CHANGELOG.md
 
 # Conventional commits
-CONVENTIONAL_COMMIT_REGEX="^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\(([[:alnum:]._-]+)\))?(!)?: ([[:alnum:] ]+)([[:space:][:print:]]*)"
+CONVENTIONAL_COMMIT_REGEX="^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\(([[:alnum:]._-]+)\))?(!)?: ([[:print:]]*)"
 CONVENTIONAL_COMMIT_TO_SHOW=("feat" "fix" "revert" "test")
 
 declare -A COMMIT_TYPE_LIST
@@ -85,7 +85,8 @@ set_changelog_release() {
 			set_tpl_vars
 			printf -v output -- "${output}### ${type_tpl[0]}" "${type_tpl[@]:1}"
 			for i in "${commit_list[@]}";do
-				debug "commit: $i"
+				debug "commit : ${GIT_COMMITS[$i]}"
+				debug "commit message : ${GIT_SUBJECT[$i]}"
 				set_tpl_vars
 				printf -v output -- "${output}${commit_tpl[0]}" "${commit_tpl[@]:1}"
 			done
