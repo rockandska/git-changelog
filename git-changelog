@@ -18,7 +18,7 @@ debug(){
 
 set_git_infos() {
 	# Git commits
-	GIT_ACTUAL_TAGS=($(git tag --points-at 2> /dev/null))
+	GIT_ACTUAL_TAGS=($(git tag --points-at 2> /dev/null || true))
 	debug "Actuals tags :" "${GIT_ACTUAL_TAGS[@]:-}"
 	GIT_ACTUAL_TAG="${CHANGELOG_TAG:-${GIT_ACTUAL_TAGS[0]:-}}"
 	debug "Actual tag :" "${GIT_ACTUAL_TAG:-}"
