@@ -117,8 +117,10 @@ update_changelog() {
 main() {
 	set_git_infos
 	set_commit_infos
-	set_changelog_release
-	update_changelog
+	if [[ "${#CONVENTIONAL_COMMIT_TO_SHOW[@]}" -gt 0 ]];then
+		set_changelog_release
+		update_changelog
+	fi
 }
 
 main
