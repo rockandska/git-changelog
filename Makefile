@@ -37,10 +37,9 @@ release:
 	$(info ##### Release #####)
 	[[ "$(LAST_VERSION)" == "$(NEXT_VERSION)" ]] && { 1>&2 echo "Error: Next version is the same as the previous one !"; exit 1; }
 	[[ -z "$(NEXT_VERSION)" ]] && { 1>&2 echo "Error: Next version is empty !"; exit 1; }
-	$(info "##### version : '$(NEXT_VERSION)' #####")
+	$(info ##### version : '$(NEXT_VERSION)' #####)
 	CHANGELOG_TAG="$(NEXT_VERSION)" $(MAKE) --no-print-directory changelog
-	git add $(MKFILE_DIR)/CHANGELOG.md
-	git commit -m "Bump version to $(NEXT_VERSION) [skip ci]"
+	git commit --amend --no-edit -m "Bump version to $(NEXT_VERSION) [skip ci]"
 	git tag -m "$(NEXT_VERSION)" "$(NEXT_VERSION)"
 
 .SECONDARY: docker-login
