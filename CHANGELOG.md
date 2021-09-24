@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.0.3
+
+### fix
+
+- only generate CHANGELOG if at least 1 conventional commit (1f0c8ba)
+
 ## 0.0.2
 
 ### fix
