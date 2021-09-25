@@ -1,15 +1,6 @@
 #!/usr/bin/env bash
 set -eEuo pipefail
 
-: "${DEBUG:=0}"
-CHANGELOG_PATH=$(git rev-parse --show-toplevel)/CHANGELOG.md
-
-# Conventional commits
-CONVENTIONAL_COMMIT_REGEX="^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\(([[:alnum:]._-]+)\))?(!)?: ([[:print:]]*)"
-CONVENTIONAL_COMMIT_TO_SHOW=("feat" "fix" "revert" "test")
-
-declare -A COMMIT_TYPE_LIST
-
 debug(){
 	if ((DEBUG));then
 		1>&2 printf 'DEBUG: %s\n' "$@"
@@ -18,78 +9,98 @@ debug(){
 
 set_git_infos() {
 	# Git commits
-	GIT_ACTUAL_TAGS=($(git tag --points-at 2> /dev/null || true))
+	local line
+	while IFS='' read -r line; do GIT_ACTUAL_TAGS+=("$line"); done < <(git tag --points-at 2> /dev/null || true)
 	debug "Actuals tags :" "${GIT_ACTUAL_TAGS[@]:-}"
 	GIT_ACTUAL_TAG="${CHANGELOG_TAG:-${GIT_ACTUAL_TAGS[0]:-}}"
 	debug "Actual tag :" "${GIT_ACTUAL_TAG:-}"
-	GIT_PREVIOUS_TAGS=($(git for-each-ref --no-contains=HEAD --sort=-creatordate --format '%(refname)' refs/tags | sed 's/refs\/tags\///'))
+	while IFS='' read -r line; do GIT_PREVIOUS_TAGS+=("$line"); done < <(git for-each-ref --no-contains=HEAD --sort=-creatordate --format '%(refname)' refs/tags 2> /dev/null | sed 's/refs\/tags\///')
 	debug "Previous tags:" "${GIT_PREVIOUS_TAGS[@]}"
 	GIT_PREVIOUS_TAG="${GIT_PREVIOUS_TAGS[0]:-}"
 	debug "Previous tag:" "${GIT_PREVIOUS_TAG}"
 
-	GIT_COMMITS=($(git rev-list "${GIT_PREVIOUS_TAG:-$(git rev-list --max-parents=0 HEAD 2> /dev/null)}.."))
+	while IFS='' read -r line; do GIT_COMMITS+=("$line"); done < <(git rev-list	"${GIT_PREVIOUS_TAG:-$(git rev-list --max-parents=0 HEAD 2> /dev/null)}.." 2> /dev/null)
 	debug "Commits list since previous tag ('${GIT_PREVIOUS_TAG}') :" "${GIT_COMMITS[@]}"
 }
 
 set_tpl_vars() {
 	# Used to generate new section in CHANGELOG
 	header_tpl=('%s\n\n' 'CHANGELOG')
-	release_tpl=('%s\n\n' "${GIT_ACTUAL_TAG}")
+	release_tpl=('%s\n\n' "${tag:-}")
 	unreleased_tpl=('%s\n\n' 'Unreleased')
 	type_tpl=('%s\n\n' "${type:-}")
-	commit_tpl=('- %s (%.7s)\n' "${COMMIT_DESCRIPTION[${i:-}]:-}" "${GIT_COMMITS[${i:-}]:-}")
-
-	# Used with sed to delete old section in CHANGELOG
-	escaped_header=$(printf "${header_tpl[0]:-}" "${header_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
-	escaped_release=$(printf "${release_tpl[0]:-}" "${release_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
-	escaped_unreleased=$(printf "${unreleased_tpl[0]:-}" "${unreleased_tpl[@]:1}" |	sed	's/[.[\/\*^$]/\\&/g')
+	commit_tpl=('- %s (%.7s)\n' "${title:-}" "${hash:-}")
 }
 
 
 set_commit_infos() {
 	debug "Loop over commits..."
+	local i
 	for i in "${!GIT_COMMITS[@]}";do
-		printf -v GIT_SUBJECT[$i] '%s' "$(git log --format='%s' -n 1 "${GIT_COMMITS[$i]}")"
-		printf -v GIT_FOOTER[$i] '%s' "$(git log --format='%(trailers)')"
-		if [[ "${GIT_SUBJECT[$i]}" =~ $CONVENTIONAL_COMMIT_REGEX ]];then
-			debug "OK : conventional commit found in subject : '${GIT_SUBJECT[$i]}' (${GIT_COMMITS[$i]::7})"
+		COMMIT_HASH[$i]="${GIT_COMMITS[$i]}"
+		# shellcheck disable=SC2059
+		printf -v COMMIT_TITLE[$i] '%s' "$(git log --format='%s' -n 1	"${COMMIT_HASH[$i]}")"
+		# shellcheck disable=SC2059
+		printf -v COMMIT_FOOTER[$i] '%s' "$(git log --format='%(trailers)')"
+		if [[ "${COMMIT_TITLE[$i]}" =~ $CONVENTIONAL_COMMIT_REGEX ]];then
+			debug "OK : conventional commit found in subject : '${COMMIT_TITLE[$i]}' (${COMMIT_HASH[$i]::7})"
 			COMMIT_TYPE[$i]="${BASH_REMATCH[1]}"
-			COMMIT_SCOPE[$i]="${BASH_REMATCH[3]}"
-			COMMIT_DESCRIPTION[$i]="${BASH_REMATCH[5]}"
-			COMMIT_BREAKING[$i]="${BASH_REMATCH[4]}"
-			if [[ -n "${COMMIT_BREAKING[$i]}" ]];then
-				COMMIT_BREAKING_MESSAGE[$i]="${COMMIT_DESCRIPTION[$i]}"
-				COMMIT_TYPE_LIST["BREAKING_CHANGES"]="${COMMIT_TYPE_LIST['BREAKING_CHANGES']} $i"
+			# shellcheck disable=SC2076
+			if [[ " ${CONVENTIONAL_COMMIT_TO_SHOW[*]} " == *" ${COMMIT_TYPE[$i]} "* ]]; then
+				debug "OK : Commit type '${COMMIT_TYPE[$i]}' is in \$CONVENTIONAL_COMMIT_TO_SHOW"
+				COMMIT_SCOPE[$i]="${BASH_REMATCH[3]}"
+				COMMIT_TITLE[$i]="${BASH_REMATCH[5]}"
+				COMMIT_BREAKING[$i]="${BASH_REMATCH[4]}"
+				if [[ -n "${COMMIT_BREAKING[$i]}" ]];then
+					COMMIT_BREAKING_MESSAGE[$i]="${COMMIT_TITLE[$i]}"
+					COMMIT_TYPE_LIST["BREAKING_CHANGES"]="${COMMIT_TYPE_LIST['BREAKING_CHANGES']} $i"
+				fi
+				COMMIT_TYPE_LIST["${COMMIT_TYPE[$i]}"]="${COMMIT_TYPE_LIST[${COMMIT_TYPE[$i]}]:-} $i"
+			else
+				debug "WARNING : Commit type '${COMMIT_TYPE[$i]}' not in \$CONVENTIONAL_COMMIT_TO_SHOW"
 			fi
-			COMMIT_TYPE_LIST["${COMMIT_TYPE[$i]}"]="${COMMIT_TYPE_LIST[${COMMIT_TYPE[$i]}]:-} $i"
 		else
-			debug "WARNING : not a conventional commit with subject '${GIT_SUBJECT[$i]}' (${GIT_COMMITS[$i]::7})"
+			debug "WARNING : not a conventional commit with subject	'${COMMIT_TITLE[$i]}' (${COMMIT_HASH[$i]::7})"
+			unset "GIT_COMMITS[$i]"
 		fi
 	done
+	# refresh the array
+	GIT_COMMITS=("${GIT_COMMITS[@]}")
 }
 
 set_changelog_release() {
 	debug "Writing changelog.."
+	local tag="${GIT_ACTUAL_TAG}"
 	set_tpl_vars
-	if [[ -n "${GIT_ACTUAL_TAG}" ]];then
+	if [[ -n "${tag:-}" ]];then
+		# shellcheck disable=SC2059
 		printf -v output -- "${output:-}## ${release_tpl[0]}" "${release_tpl[@]:1}"
 	else
+		# shellcheck disable=SC2059
 		printf -v output -- "${output:-}## ${unreleased_tpl[0]}" "${unreleased_tpl[@]:1}"
 	fi
 
+	local type
 	for type in "${CONVENTIONAL_COMMIT_TO_SHOW[@]}";do
 		debug "Processing commit type: $type"
 		if [[ -n "${COMMIT_TYPE_LIST[$type]:-}" ]];then
-			IFS=" " read -a commit_list <<< "${COMMIT_TYPE_LIST[$type]}"
+			local commit_list
+			IFS=" " read -r -a commit_list <<< "${COMMIT_TYPE_LIST[$type]}"
 			debug "commits with type : $type" "${commit_list[@]}"
 			set_tpl_vars
+			# shellcheck disable=SC2059
 			printf -v output -- "${output}### ${type_tpl[0]}" "${type_tpl[@]:1}"
+			local i
 			for i in "${commit_list[@]}";do
-				debug "commit : ${GIT_COMMITS[$i]}"
-				debug "commit message : ${GIT_SUBJECT[$i]}"
+				local hash="${GIT_COMMITS[$i]}"
+				debug "commit : ${hash}"
+				local title="${COMMIT_TITLE[$i]}"
+				debug "commit message : ${title}"
 				set_tpl_vars
+				# shellcheck disable=SC2059
 				printf -v output -- "${output}${commit_tpl[0]}" "${commit_tpl[@]:1}"
 			done
+			# shellcheck disable=SC2059
 			printf -v output -- "${output}\n"
 		else
 			debug "No commit found with type : ${type}"
@@ -98,10 +109,22 @@ set_changelog_release() {
 }
 
 update_changelog() {
+	# Used with sed to delete old section in CHANGELOG
+	local escaped_header
+	local escaped_release
+	local escaped_unreleased
+	# shellcheck disable=SC2059
+	escaped_header=$(printf "${header_tpl[0]:-}" "${header_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
+	# shellcheck disable=SC2059
+	escaped_release=$(printf "${release_tpl[0]:-}" "${release_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
+	# shellcheck disable=SC2059
+	escaped_unreleased=$(printf "${unreleased_tpl[0]:-}" "${unreleased_tpl[@]:1}" |	sed	's/[.[\/\*^$]/\\&/g')
+
 	touch "${CHANGELOG_PATH}"
+	# shellcheck disable=SC2059
 	printf -v output -- "# ${header_tpl[0]}${output}" "${header_tpl[@]:1}"
 	printf -v output -- '%s' "${output}$( \
-		sed -e '$a## ' ${CHANGELOG_PATH} | \
+		sed -e '$a## ' "${CHANGELOG_PATH}" | \
 		sed \
 		-e "/^# ${escaped_header}$/,/^## /{//!d}" \
 		-e "/^# ${escaped_header}$/d" \
@@ -115,12 +138,44 @@ update_changelog() {
 }
 
 main() {
+	: "${DEBUG:=0}"
+
+	# Default CHANGELOG file
+	local GIT_TOP_LEVEL
+	GIT_TOP_LEVEL=$(git rev-parse --show-toplevel)
+	local CHANGELOG_PATH
+	CHANGELOG_PATH="${GIT_TOP_LEVEL}/CHANGELOG.md"
+
+	# Conventional commits
+	local CONVENTIONAL_COMMIT_REGEX="^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\(([[:alnum:]._-]+)\))?(!)?: ([[:print:]]*)"
+	local CONVENTIONAL_COMMIT_TO_SHOW=("feat" "fix" "revert" "test")
+
+	# Git infos
+	local GIT_ACTUAL_TAGS
+	local GIT_ACTUAL_TAG
+	local GIT_PREVIOUS_TAGS
+	local GIT_PREVIOUS_TAG
+	local GIT_COMMITS
+
+	# Commit info
+	local COMMIT_HASH=()
+	local COMMIT_TITLE=()
+	local COMMIT_FOOTER=()
+	local COMMIT_TYPE=()
+	local COMMIT_SCOPE=()
+	local COMMIT_BREAKING=()
+	local COMMIT_BREAKING_MESSAGE=()
+	declare -A COMMIT_TYPE_LIST
+
 	set_git_infos
 	set_commit_infos
-	if [[ "${#CONVENTIONAL_COMMIT_TO_SHOW[@]}" -gt 0 ]];then
+	if [[ "${#GIT_COMMITS[@]}" -gt 0 ]];then
 		set_changelog_release
 		update_changelog
+		1>&2 echo "${CHANGELOG_PATH} updated !"
+	else
+		1>&2 echo "No changes made to ${CHANGELOG_PATH}"
 	fi
 }
 
-main
+main "$@"
