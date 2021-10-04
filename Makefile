@@ -20,6 +20,7 @@ LAST_VERSION := $(shell git for-each-ref --sort=-creatordate --format '%(refname
 NEXT_VERSION := $(shell docker run --rm -v $(MKFILE_DIR):/tmp --workdir /tmp ghcr.io/caarlos0/svu next --strip-prefix)
 
 SHELL_CHECK_VERSION := v0.7.0
+DOCKERHUB_DESCRIPTION_VERSION := 2.4.2
 
 ###############
 
@@ -53,7 +54,7 @@ docker-login:
 			[[ $$'$(DOCKER_REGISTRY_PASSWORD)' == "" ]] && {
 					1>&2 echo "Error: DOCKER_REGISTRY_PASSWORD not set";
 					exit 1;
-			} || docker login --username $(DOCKER_REGISTRY_USER) --password $$'$(DOCKER_REGISTRY_PASSWORD)' $(DOCKER_REGISTRY);
+			} || echo $$'$(DOCKER_REGISTRY_PASSWORD)' | docker login --username $(DOCKER_REGISTRY_USER) --password-stdin $(DOCKER_REGISTRY);
 	}
 
 .PHONY: docker-build
@@ -71,6 +72,21 @@ endif
 	$(info ##### Publishing '$(DOCKER_IMAGE_NAME):latest' on registry $(DOCKER_REGISTRY) #####)
 	docker image tag $(DOCKER_IMAGE_NAME):latest $(DOCKER_IMAGE_FULL_NAME):latest
 	docker push $(DOCKER_IMAGE_FULL_NAME):latest
+
+docker-sync-readme: docker-login
+	$(info ##### Syncing README to DockerHub #####)
+ifeq ($(DOCKER_REGISTRY_PASSWORD),)
+	$(info ##### Try to retrieve credentials from ~/.docker/config.json #####)
+	DOCKER_CONFIG_CREDS=$$(cat ~/.docker/config.json | docker run -i --rm itchyny/gojq:0.12.5 -r '.auths | with_entries( select(.key|contains("$(if $(DOCKER_REGISTRY),$(DOCKER_REGISTRY),docker.io)")))[].auth' | base64 -d)
+	IFS=: read DOCKER_REGISTRY_USER DOCKER_REGISTRY_PASSWORD <<< "$${DOCKER_CONFIG_CREDS}"
+endif
+	docker run -v $(MKFILE_DIR):/workspace \
+	-e DOCKERHUB_USERNAME="$(if $(DOCKER_REGISTRY_USER),$(DOCKER_REGISTRY_USER),$${DOCKER_REGISTRY_USER})" \
+	-e DOCKERHUB_PASSWORD="$(if $(DOCKER_REGISTRY_PASSWORD),$(DOCKER_REGISTRY_PASSWORD),$${DOCKER_REGISTRY_PASSWORD})" \
+	-e DOCKERHUB_REPOSITORY="$(DOCKER_IMAGE_FULL_NAME)" \
+	-e README_FILEPATH='/workspace/README.md' \
+	-e SHORT_DESCRIPTION='Custom git command to generate/update CHANGELOG from conventional commits' \
+	peterevans/dockerhub-description:$(DOCKERHUB_DESCRIPTION_VERSION)
 
 .PHONY: test
 test: shellcheck
