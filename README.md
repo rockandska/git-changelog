@@ -45,6 +45,5 @@ docker run --rm -ti -v $(pwd):/git -e CHANGELOG_TAG=1.0.0 rockandska/git-changel
 - add BREAKING CHANGES
 - add Scope section
 - add possibility to convert type to a more friendly name (ex: feat -> Features)
-- add tests
 - allow to only print generated CHANGELOG
 - allow to go in the past
