@@ -19,7 +19,11 @@ set_git_infos() {
 	GIT_PREVIOUS_TAG="${GIT_PREVIOUS_TAGS[0]:-}"
 	debug "Previous tag:" "${GIT_PREVIOUS_TAG}"
 
-	while IFS='' read -r line; do GIT_COMMITS+=("$line"); done < <(git rev-list	"${GIT_PREVIOUS_TAG:-$(git rev-list --max-parents=0 HEAD 2> /dev/null)}.." 2> /dev/null)
+	if [[ -n "${GIT_PREVIOUS_TAG:-}" ]];then
+		while IFS='' read -r line; do GIT_COMMITS+=("$line"); done < <(git rev-list	"${GIT_PREVIOUS_TAG}.." 2> /dev/null)
+	else
+		while IFS='' read -r line; do GIT_COMMITS+=("$line"); done < <(git rev-list	HEAD 2> /dev/null)
+	fi
 	debug "Commits list since previous tag ('${GIT_PREVIOUS_TAG}') :" "${GIT_COMMITS[@]}"
 }
 
