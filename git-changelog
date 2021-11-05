@@ -117,6 +117,8 @@ update_changelog() {
 	local escaped_header
 	local escaped_release
 	local escaped_unreleased
+	local changelog_cleaned
+	local line
 	# shellcheck disable=SC2059
 	escaped_header=$(printf "${header_tpl[0]:-}" "${header_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
 	# shellcheck disable=SC2059
@@ -125,23 +127,46 @@ update_changelog() {
 	escaped_unreleased=$(printf "${unreleased_tpl[0]:-}" "${unreleased_tpl[@]:1}" |	sed	's/[.[\/\*^$]/\\&/g')
 
 	touch "${CHANGELOG_PATH}"
-	# shellcheck disable=SC2059
-	printf -v output -- "# ${header_tpl[0]}${output}" "${header_tpl[@]:1}"
-	printf -v output -- '%s' "${output}$( \
-		sed -e '$a## ' "${CHANGELOG_PATH}" | \
+
+	# header
+	while IFS= read -r line;do
+		changelog_cleaned+=( "$line" )
+	done < <(
+		# shellcheck disable=SC2059
+		printf "# ${header_tpl[0]}" "${header_tpl[@]:1}" \
+		&& printf '\0'
+	)
+
+	# new
+	while IFS= read -r line;do
+		changelog_cleaned+=( "$line" )
+	done < <(
+		printf '%s' "$output" \
+		&& printf '\0'
+	)
+
+	# old
+	while IFS= read -r line;do
+		changelog_cleaned+=( "$line" )
+	done < <(
 		sed \
-		-e "/^# ${escaped_header}$/,/^## /{//!d}" \
-		-e "/^# ${escaped_header}$/d" \
-		-e "/^## ${escaped_unreleased}$/,/^## /{//!d}" \
-		-e "/^## ${escaped_unreleased}$/d"  \
-		-e "/^## ${escaped_release}$/,/^## /{//!d}" \
-		-e "/^## ${escaped_release}$/d"  \
-		-e '${/^## $/d;}' \
-	)"
-	echo -n "${output}" > "${CHANGELOG_PATH}"
+			-e '$a## ' "${CHANGELOG_PATH}" | \
+		sed \
+			-e "/^# ${escaped_header}$/,/^## /{//!d}" \
+			-e "/^# ${escaped_header}$/d" \
+			-e "/^## ${escaped_unreleased}$/,/^## /{//!d};" \
+			-e "/^## ${escaped_unreleased}$/d"  \
+			-e "/^## ${escaped_release}$/,/^## /{//!d};" \
+			-e "/^## ${escaped_release}$/d"  \
+			-e '${/^## $/d;}' \
+			&& printf '\0'
+	)
+
+	# shellcheck disable=SC1003
+	printf '%s\n' "${changelog_cleaned[@]}" > "${CHANGELOG_PATH}"
 }
 
-main() {
+git-changelog() {
 	: "${DEBUG:=0}"
 
 	# Default CHANGELOG file
@@ -182,4 +207,4 @@ main() {
 	fi
 }
 
-main "$@"
+git-changelog "$@"
