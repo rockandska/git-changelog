@@ -1,11 +1,4 @@
-setup_file() {
-  # shellcheck disable=SC2034
-  if [ -z "${BATS_PROJECT_DIR+x}" ];then
-    1>&2 echo "Error: BATS_PROJECT_DIR is not set"
-    return 1
-  fi
-  PATH="${BATS_PROJECT_DIR}:${PATH}"
-}
+load fixtures/setup_file.sh
 
 setup() {
   cd $BATS_TEST_TMPDIR

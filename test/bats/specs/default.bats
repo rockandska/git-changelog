@@ -1,15 +1,4 @@
-setup_file() {
-  # shellcheck disable=SC2034
-  if [ -z "${BATS_PROJECT_DIR+x}" ];then
-    1>&2 echo "Error: BATS_PROJECT_DIR is not set"
-    return 1
-  fi
-  PATH="${BATS_PROJECT_DIR}:${PATH}"
-  if ! git config user.name &> /dev/null;then
-    git config --global user.name test
-    git config --global user.email "test@test.com"
-  fi
-}
+load fixtures/setup_file.sh
 
 setup() {
   cd $BATS_TEST_TMPDIR
@@ -99,6 +88,41 @@ EOF
 ### fix
 
 - add fix (${git_commit_fix})
+
+EOF
+)
+}
+
+@test "update changelog with 1 commit (fix) works" {
+  cat >> ${BATS_TEST_TMPDIR}/CHANGELOG.md <<EOF
+# CHANGELOG
+
+## 0.0.1
+
+### fix
+
+- add fix (0000000)
+
+EOF
+  git init
+  git commit --allow-empty -m"fix: add fix"
+  run git-changelog
+  [ "$output" == "${BATS_TEST_TMPDIR}/CHANGELOG.md updated !" ]
+  git_commit=$(git rev-parse --short HEAD)
+  diff "${BATS_TEST_TMPDIR}/CHANGELOG.md" <(cat <<EOF
+# CHANGELOG
+
+## Unreleased
+
+### fix
+
+- add fix (${git_commit})
+
+## 0.0.1
+
+### fix
+
+- add fix (0000000)
 
 EOF
 )
