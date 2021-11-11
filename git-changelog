@@ -45,20 +45,31 @@ set_commit_infos() {
 		# shellcheck disable=SC2059
 		printf -v COMMIT_TITLE[$i] '%s' "$(git log --format='%s' -n 1	"${COMMIT_HASH[$i]}")"
 		# shellcheck disable=SC2059
-		printf -v COMMIT_FOOTER[$i] '%s' "$(git log --format='%(trailers)')"
+		printf -v COMMIT_BODY[$i] '%s' "$(git log --format='%b')"
 		if [[ "${COMMIT_TITLE[$i]}" =~ $CONVENTIONAL_COMMIT_REGEX ]];then
 			debug "OK : conventional commit found in subject : '${COMMIT_TITLE[$i]}' (${COMMIT_HASH[$i]::7})"
 			COMMIT_TYPE[$i]="${BASH_REMATCH[1]}"
+			COMMIT_BREAKING[$i]="${BASH_REMATCH[4]}"
+			# Check BREAKING CHANGE first in case the commit type is not in the one to show
+			local BASH_REMATCH_BACKUP=("${BASH_REMATCH[@]}")
+			if [[ -n "${COMMIT_BREAKING[$i]}" ]];then
+				debug "OK : BREAKING CHANGE found in title : '${COMMIT_TITLE[$i]}' (${COMMIT_HASH[$i]::7})"
+				COMMIT_TYPE[$i]="BREAKING_CHANGES"
+			else
+				local line
+				while IFS='' read -r line; do
+					local regex="^BREAKING[ -]CHANGE:"
+					if [[ "$line" =~ $regex ]];then
+						debug "OK : BREAKING CHANGE found in body : '${COMMIT_BODY[$i]}' (${COMMIT_HASH[$i]::7})"
+						COMMIT_TYPE[$i]="BREAKING_CHANGES"
+					fi
+				done <<<"${COMMIT_BODY[$i]}"
+			fi
 			# shellcheck disable=SC2076
 			if [[ " ${CONVENTIONAL_COMMIT_TO_SHOW[*]} " == *" ${COMMIT_TYPE[$i]} "* ]]; then
 				debug "OK : Commit type '${COMMIT_TYPE[$i]}' is in \$CONVENTIONAL_COMMIT_TO_SHOW"
-				COMMIT_SCOPE[$i]="${BASH_REMATCH[3]}"
-				COMMIT_TITLE[$i]="${BASH_REMATCH[5]}"
-				COMMIT_BREAKING[$i]="${BASH_REMATCH[4]}"
-				if [[ -n "${COMMIT_BREAKING[$i]}" ]];then
-					COMMIT_BREAKING_MESSAGE[$i]="${COMMIT_TITLE[$i]}"
-					COMMIT_TYPE_LIST["BREAKING_CHANGES"]="${COMMIT_TYPE_LIST['BREAKING_CHANGES']} $i"
-				fi
+				COMMIT_SCOPE[$i]="${BASH_REMATCH_BACKUP[3]}"
+				COMMIT_TITLE[$i]="${BASH_REMATCH_BACKUP[5]}"
 				COMMIT_TYPE_LIST["${COMMIT_TYPE[$i]}"]="${COMMIT_TYPE_LIST[${COMMIT_TYPE[$i]}]:-} $i"
 			else
 				debug "WARNING : Commit type '${COMMIT_TYPE[$i]}' not in \$CONVENTIONAL_COMMIT_TO_SHOW"
@@ -177,7 +188,7 @@ git-changelog() {
 
 	# Conventional commits
 	local CONVENTIONAL_COMMIT_REGEX="^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\(([[:alnum:]._-]+)\))?(!)?: ([[:print:]]*)"
-	local CONVENTIONAL_COMMIT_TO_SHOW=("feat" "fix" "revert" "test")
+	local CONVENTIONAL_COMMIT_TO_SHOW=("BREAKING_CHANGES" "feat" "fix" "revert" "test")
 
 	# Git infos
 	local GIT_ACTUAL_TAGS
@@ -189,11 +200,10 @@ git-changelog() {
 	# Commit info
 	local COMMIT_HASH=()
 	local COMMIT_TITLE=()
-	local COMMIT_FOOTER=()
+	local COMMIT_BODY=()
 	local COMMIT_TYPE=()
 	local COMMIT_SCOPE=()
 	local COMMIT_BREAKING=()
-	local COMMIT_BREAKING_MESSAGE=()
 	declare -A COMMIT_TYPE_LIST
 
 	set_git_infos
