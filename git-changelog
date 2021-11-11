@@ -27,13 +27,33 @@ set_git_infos() {
 	debug "Commits list since previous tag ('${GIT_PREVIOUS_TAG}') :" "${GIT_COMMITS[@]}"
 }
 
-set_tpl_vars() {
-	# Used to generate new section in CHANGELOG
-	header_tpl=('%s\n\n' 'CHANGELOG')
-	release_tpl=('%s\n\n' "${tag:-}")
-	unreleased_tpl=('%s\n\n' 'Unreleased')
-	type_tpl=('%s\n\n' "${type:-}")
-	commit_tpl=('- %s (%.7s)\n' "${title:-}" "${hash:-}")
+set_user_config() {
+	local user_conf
+	if [ -f "${CONFIG_DIR}/config" ];then
+		debug "User config found in ${CONFIG_DIR}, loading it..."
+		user_conf=$(<"${CONFIG_DIR}/config")
+	fi
+	local repo_conf
+	if [ -f "${GIT_TOP_LEVEL}/.git-changelog" ];then
+		debug "Repo config found in ${GIT_TOP_LEVEL}, loading it..."
+		repo_conf=$(<"${GIT_TOP_LEVEL}/.git-changelog")
+	fi
+	source /dev/stdin <<-EOF
+		set_tpl_vars() {
+			: \${hash:=}
+			: \${tag:=}
+			: \${title:=}
+			: \${type:=}
+			# Used to generate new section in CHANGELOG
+			header_tpl=('%s\n\n' 'CHANGELOG')
+			release_tpl=('%s\n\n' "\${tag}")
+			unreleased_tpl=('%s\n\n' 'Unreleased')
+			type_tpl=('%s\n\n' "\${type}")
+			commit_tpl=('- %s (%.7s)\n' "\${title}" "\${hash}")
+			${user_conf:-}
+			${repo_conf:-}
+		}
+	EOF
 }
 
 
@@ -89,10 +109,10 @@ set_changelog_release() {
 	local tag="${GIT_ACTUAL_TAG}"
 	set_tpl_vars
 	if [[ -n "${tag:-}" ]];then
-		# shellcheck disable=SC2059
+		# shellcheck disable=SC2059,SC2154
 		printf -v output -- "${output:-}## ${release_tpl[0]}" "${release_tpl[@]:1}"
 	else
-		# shellcheck disable=SC2059
+		# shellcheck disable=SC2059,SC2154
 		printf -v output -- "${output:-}## ${unreleased_tpl[0]}" "${unreleased_tpl[@]:1}"
 	fi
 
@@ -104,7 +124,7 @@ set_changelog_release() {
 			IFS=" " read -r -a commit_list <<< "${COMMIT_TYPE_LIST[$type]}"
 			debug "commits with type : $type" "${commit_list[@]}"
 			set_tpl_vars
-			# shellcheck disable=SC2059
+			# shellcheck disable=SC2059,SC2154
 			printf -v output -- "${output}### ${type_tpl[0]}" "${type_tpl[@]:1}"
 			local i
 			for i in "${commit_list[@]}";do
@@ -113,7 +133,7 @@ set_changelog_release() {
 				local title="${COMMIT_TITLE[$i]}"
 				debug "commit message : ${title}"
 				set_tpl_vars
-				# shellcheck disable=SC2059
+				# shellcheck disable=SC2059,SC2154
 				printf -v output -- "${output}${commit_tpl[0]}" "${commit_tpl[@]:1}"
 			done
 			# shellcheck disable=SC2059
@@ -132,11 +152,11 @@ update_changelog() {
 	local changelog_cleaned
 	local line
 	# shellcheck disable=SC2059
-	escaped_header=$(printf "${header_tpl[0]:-}" "${header_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
+	escaped_header=$(printf -- "${header_tpl[0]:-}" "${header_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
 	# shellcheck disable=SC2059
-	escaped_release=$(printf "${release_tpl[0]:-}" "${release_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
+	escaped_release=$(printf -- "${release_tpl[0]:-}" "${release_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
 	# shellcheck disable=SC2059
-	escaped_unreleased=$(printf "${unreleased_tpl[0]:-}" "${unreleased_tpl[@]:1}" |	sed	's/[.[\/\*^$]/\\&/g')
+	escaped_unreleased=$(printf -- "${unreleased_tpl[0]:-}" "${unreleased_tpl[@]:1}" |	sed	's/[.[\/\*^$]/\\&/g')
 
 	touch "${CHANGELOG_PATH}"
 
@@ -145,7 +165,7 @@ update_changelog() {
 		changelog_cleaned+=( "$line" )
 	done < <(
 		# shellcheck disable=SC2059
-		printf "# ${header_tpl[0]}" "${header_tpl[@]:1}" \
+		printf -- "# ${header_tpl[0]}" "${header_tpl[@]:1}" \
 		&& printf '\0'
 	)
 
@@ -181,6 +201,10 @@ update_changelog() {
 git-changelog() {
 	: "${DEBUG:=0}"
 
+	# Program related
+	local PROGRAM_NAME="git-changelog"
+	local CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/${PROGRAM_NAME}"
+
 	# Default CHANGELOG file
 	local GIT_TOP_LEVEL
 	GIT_TOP_LEVEL=$(git rev-parse --show-toplevel)
@@ -209,6 +233,7 @@ git-changelog() {
 
 	set_git_infos
 	set_commit_infos
+	set_user_config
 	if [[ "${#GIT_COMMITS[@]}" -gt 0 ]];then
 		set_changelog_release
 		update_changelog
