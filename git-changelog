@@ -73,6 +73,7 @@ set_commit_infos() {
 				COMMIT_TYPE_LIST["${COMMIT_TYPE[$i]}"]="${COMMIT_TYPE_LIST[${COMMIT_TYPE[$i]}]:-} $i"
 			else
 				debug "WARNING : Commit type '${COMMIT_TYPE[$i]}' not in \$CONVENTIONAL_COMMIT_TO_SHOW"
+				unset "GIT_COMMITS[$i]"
 			fi
 		else
 			debug "WARNING : not a conventional commit with subject	'${COMMIT_TITLE[$i]}' (${COMMIT_HASH[$i]::7})"
@@ -107,7 +108,7 @@ set_changelog_release() {
 			printf -v output -- "${output}### ${type_tpl[0]}" "${type_tpl[@]:1}"
 			local i
 			for i in "${commit_list[@]}";do
-				local hash="${GIT_COMMITS[$i]}"
+				local hash="${COMMIT_HASH[$i]}"
 				debug "commit : ${hash}"
 				local title="${COMMIT_TITLE[$i]}"
 				debug "commit message : ${title}"
