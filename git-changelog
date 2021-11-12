@@ -18,13 +18,6 @@ set_git_infos() {
 	debug "Previous tags:" "${GIT_PREVIOUS_TAGS[@]}"
 	GIT_PREVIOUS_TAG="${GIT_PREVIOUS_TAGS[0]:-}"
 	debug "Previous tag:" "${GIT_PREVIOUS_TAG}"
-
-	if [[ -n "${GIT_PREVIOUS_TAG:-}" ]];then
-		while IFS='' read -r line; do GIT_COMMITS+=("$line"); done < <(git rev-list	"${GIT_PREVIOUS_TAG}.." 2> /dev/null)
-	else
-		while IFS='' read -r line; do GIT_COMMITS+=("$line"); done < <(git rev-list	HEAD 2> /dev/null)
-	fi
-	debug "Commits list since previous tag ('${GIT_PREVIOUS_TAG}') :" "${GIT_COMMITS[@]}"
 }
 
 set_user_config() {
@@ -59,49 +52,52 @@ set_user_config() {
 
 set_commit_infos() {
 	debug "Loop over commits..."
-	local i
-	for i in "${!GIT_COMMITS[@]}";do
-		COMMIT_HASH[$i]="${GIT_COMMITS[$i]}"
-		# shellcheck disable=SC2059
-		printf -v COMMIT_TITLE[$i] '%s' "$(git log --format='%s' -n 1	"${COMMIT_HASH[$i]}")"
-		# shellcheck disable=SC2059
-		printf -v COMMIT_BODY[$i] '%s' "$(git log --format='%b')"
-		if [[ "${COMMIT_TITLE[$i]}" =~ $CONVENTIONAL_COMMIT_REGEX ]];then
-			debug "OK : conventional commit found in subject : '${COMMIT_TITLE[$i]}' (${COMMIT_HASH[$i]::7})"
-			COMMIT_TYPE[$i]="${BASH_REMATCH[1]}"
-			COMMIT_BREAKING[$i]="${BASH_REMATCH[4]}"
-			# Check BREAKING CHANGE first in case the commit type is not in the one to show
-			local BASH_REMATCH_BACKUP=("${BASH_REMATCH[@]}")
-			if [[ -n "${COMMIT_BREAKING[$i]}" ]];then
-				debug "OK : BREAKING CHANGE found in title : '${COMMIT_TITLE[$i]}' (${COMMIT_HASH[$i]::7})"
-				COMMIT_TYPE[$i]="BREAKING_CHANGES"
+	local commit_infos
+	local commit_hash
+	local commit_subject
+	local commit_body
+	local commit_type
+	local commit_breaking
+	local commit_scope
+	local commit_title
+	local i=0
+	while IFS= read -r -d $'\0' commit_infos; do
+		eval "$commit_infos"
+		if [[ "${commit_subject}" =~ $CONVENTIONAL_COMMIT_REGEX ]];then
+			debug "OK : conventional commit found in subject : '${commit_subject}' (${commit_hash::7})"
+			commit_type="${BASH_REMATCH[1]}"
+			commit_breaking="${BASH_REMATCH[4]}"
+			commit_scope="${BASH_REMATCH[3]}"
+			commit_title="${BASH_REMATCH[5]}"
+			if [[ -n "${commit_breaking}" ]];then
+				debug "OK : BREAKING CHANGE found in title : '${commit_subject}' (${commit_hash::7})"
+				commit_type="BREAKING_CHANGES"
 			else
 				local line
 				while IFS='' read -r line; do
 					local regex="^BREAKING[ -]CHANGE:"
 					if [[ "$line" =~ $regex ]];then
-						debug "OK : BREAKING CHANGE found in body : '${COMMIT_BODY[$i]}' (${COMMIT_HASH[$i]::7})"
-						COMMIT_TYPE[$i]="BREAKING_CHANGES"
+						debug "OK : BREAKING CHANGE found in body : '${commit_body}' (${commit_hash::7})"
+						commit_type="BREAKING_CHANGES"
 					fi
-				done <<<"${COMMIT_BODY[$i]}"
+				done <<<"${commit_body}"
 			fi
 			# shellcheck disable=SC2076
-			if [[ " ${CONVENTIONAL_COMMIT_TO_SHOW[*]} " == *" ${COMMIT_TYPE[$i]} "* ]]; then
-				debug "OK : Commit type '${COMMIT_TYPE[$i]}' is in \$CONVENTIONAL_COMMIT_TO_SHOW"
-				COMMIT_SCOPE[$i]="${BASH_REMATCH_BACKUP[3]}"
-				COMMIT_TITLE[$i]="${BASH_REMATCH_BACKUP[5]}"
-				COMMIT_TYPE_LIST["${COMMIT_TYPE[$i]}"]="${COMMIT_TYPE_LIST[${COMMIT_TYPE[$i]}]:-} $i"
+			if [[ " ${CONVENTIONAL_COMMIT_TO_SHOW[*]} " == *" ${commit_type} "* ]]; then
+				debug "OK : Commit type '$commit_type' is in \$CONVENTIONAL_COMMIT_TO_SHOW"
+				COMMIT_HASH[$i]="$commit_hash"
+				COMMIT_TITLE[$i]="$commit_title"
+				COMMIT_BODY[$i]="$commit_body"
+				COMMIT_SCOPE[$i]="$commit_scope"
+				COMMIT_TYPE_LIST["$commit_type"]="${COMMIT_TYPE_LIST[$commit_type]:-} $i"
+				((i=i+1))
 			else
-				debug "WARNING : Commit type '${COMMIT_TYPE[$i]}' not in \$CONVENTIONAL_COMMIT_TO_SHOW"
-				unset "GIT_COMMITS[$i]"
+				debug "WARNING : Commit type '${commit_type}' not in \$CONVENTIONAL_COMMIT_TO_SHOW"
 			fi
 		else
-			debug "WARNING : not a conventional commit with subject	'${COMMIT_TITLE[$i]}' (${COMMIT_HASH[$i]::7})"
-			unset "GIT_COMMITS[$i]"
+			debug "WARNING : not a conventional commit with subject	'${commit_subject}' (${commit_hash::7})"
 		fi
-	done
-	# refresh the array
-	GIT_COMMITS=("${GIT_COMMITS[@]}")
+	done < <(git log -z	--pretty="IFS='' read -d '' -r commit_hash <<EOF ||	true%n%H%nEOF%nIFS='' read -d '' -r commit_subject <<EOF ||	true%n%s%nEOF%nIFS='' read -d	'' -r commit_body <<EOF || true%n%bEOF"	${GIT_PREVIOUS_TAG:+${GIT_PREVIOUS_TAG}..HEAD} 2>/dev/null)
 }
 
 set_changelog_release() {
@@ -220,21 +216,18 @@ git-changelog() {
 	local GIT_ACTUAL_TAG
 	local GIT_PREVIOUS_TAGS
 	local GIT_PREVIOUS_TAG
-	local GIT_COMMITS
 
 	# Commit info
 	local COMMIT_HASH=()
 	local COMMIT_TITLE=()
 	local COMMIT_BODY=()
-	local COMMIT_TYPE=()
 	local COMMIT_SCOPE=()
-	local COMMIT_BREAKING=()
 	declare -A COMMIT_TYPE_LIST
 
 	set_git_infos
 	set_commit_infos
 	set_user_config
-	if [[ "${#GIT_COMMITS[@]}" -gt 0 ]];then
+	if [[ "${#COMMIT_HASH[@]}" -gt 0 ]];then
 		set_changelog_release
 		update_changelog
 		1>&2 echo "${CHANGELOG_PATH} updated !"
