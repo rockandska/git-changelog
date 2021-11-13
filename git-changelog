@@ -107,6 +107,8 @@ set_changelog_release() {
 	debug "Writing changelog.."
 	local tag="${GIT_ACTUAL_TAG}"
 	local show_scope
+	declare -A commit_type_traduction
+	declare -A commit_scope_traduction
 	set_tpl_vars
 	if [[ -n "${tag:-}" ]];then
 		# shellcheck disable=SC2059,SC2154
@@ -123,12 +125,13 @@ set_changelog_release() {
 			local commit_list
 			IFS=" " read -r -a commit_list <<< "${COMMIT_TYPE_LIST[$type]}"
 			debug "commits with type : $type" "${commit_list[@]}"
+			# traduction
+			type="${commit_type_traduction["$type"]:-$type}"
 			set_tpl_vars
 			# shellcheck disable=SC2059,SC2154
 			printf -v output -- "${output}### ${type_tpl[0]}" "${type_tpl[@]:1}"
 			if [ -n "${show_scope}" ];then
 				while IFS= read -r scope;do
-					set_tpl_vars
 					local scope_commits=()
 					for commit in "${commit_list[@]}";do
 						if [[ " ${COMMIT_SCOPE_LIST["$scope"]} " == *" ${commit} "* ]];then
@@ -137,6 +140,9 @@ set_changelog_release() {
 					done
 					debug "commits with scope : $scope" "${scope_commits[@]}"
 					if [ "${#scope_commits[@]}" -gt 0 ];then
+						# traduction
+						scope="${commit_scope_traduction["$scope"]:-$scope}"
+						set_tpl_vars
 						# shellcheck disable=SC2059,SC2154
 						printf -v output -- "${output}#### ${scope_tpl[0]}" "${scope_tpl[@]:1}"
 						set_changelog_release_commits "${scope_commits[@]}"
@@ -158,7 +164,9 @@ set_changelog_release_commits() {
 		local hash="${COMMIT_HASH[$i]}"
 		debug "commit : ${hash}"
 		local title="${COMMIT_TITLE[$i]}"
-		debug "commit message : ${title}"
+		debug "commit title : ${title}"
+		local scope="${commit_scope_traduction["${COMMIT_SCOPE[$i]}"]:-${COMMIT_SCOPE[$i]}}"
+		debug "commit scope : ${scope}"
 		set_tpl_vars
 		# shellcheck disable=SC2059,SC2154
 		printf -v output -- "${output}${commit_tpl[0]}" "${commit_tpl[@]:1}"

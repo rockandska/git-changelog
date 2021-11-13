@@ -57,6 +57,8 @@ Available variables who could be changed are :
 - unreleased_tpl: used to generate unreleased section when no tag exists
 - type_tpl: used to generate a section who regroup all commits from same type
 - commit_tpl: used to display commits informations related to the current type
+- commit_type_traduction: associative array to convert type to more friendly names
+- commit_scope_traduction: associative array to convert scope to more friendly names
 
 ### Default configuration
 
@@ -103,6 +105,5 @@ Use this configuration to change git-changelog behavior for a specific repo.
 ## TODO
 
 - write documentation
-- add possibility to convert type to a more friendly name (ex: feat -> Features)
 - allow to only print generated CHANGELOG
 - allow to go in the past
