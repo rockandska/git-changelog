@@ -40,30 +40,18 @@ docker run --rm -ti -v $(pwd):/git -e CHANGELOG_TAG=1.0.0 rockandska/git-changel
 
 ## Configuration
 
-Config variables should be BASH array representig a printf expression.
-
-Example:
-
-```bash
-commit_tpl=('- %s (%.7s)\n' "${title:-}" "${hash:-}")
-```
-
-would be convert to :
-
-```bash
-printf -- '- %s (%.7s)\n' "${title:-}" "${hash:-}"
-```
-
 ### Variables
 
 In configuration, some variables are availables for use
 
 - tag : current tag if exists
 - type: current commit type ( feat, fix, etc.. )
+- scope: current commit scope
 - hash: current commit hash
 
 Available variables who could be changed are :
 
+- show_scope: Will show commits grouped by scope if set to non empty
 - header_tpl: used to generate a HEADER section
 - release_tpl: used to generate release section when a tag exists
 - unreleased_tpl: used to generate unreleased section when no tag exists
@@ -73,11 +61,30 @@ Available variables who could be changed are :
 ### Default configuration
 
 ```bash
+# Should we show scope section ?
+show_scope=
+
+# Templates
 header_tpl=('%s\n\n' 'CHANGELOG')
-release_tpl=('%s\n\n' "${tag:-}")
+release_tpl=('%s\n\n' "${tag}")
 unreleased_tpl=('%s\n\n' 'Unreleased')
-type_tpl=('%s\n\n' "${type:-}")
-commit_tpl=('- %s (%.7s)\n' "${title:-}" "${hash:-}")
+scope_tpl=('%s\n\n' "\${scope}")
+type_tpl=('%s\n\n' "${type}")
+commit_tpl=('- %s (%.7s)\n' "${title}" "${hash}")
+```
+
+Templates variables ([var]_tpl) should be BASH array representig a printf expression.
+
+Example:
+
+```bash
+commit_tpl=('- %s (%.7s)\n' "${title}" "${hash}")
+```
+
+would be convert to :
+
+```bash
+printf -- '- %s (%.7s)\n' "${title}" "${hash}"
 ```
 
 ### Global user configuration
@@ -96,7 +103,6 @@ Use this configuration to change git-changelog behavior for a specific repo.
 ## TODO
 
 - write documentation
-- add Scope section
 - add possibility to convert type to a more friendly name (ex: feat -> Features)
 - allow to only print generated CHANGELOG
 - allow to go in the past

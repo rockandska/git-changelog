@@ -37,11 +37,13 @@ set_user_config() {
 			: \${tag:=}
 			: \${title:=}
 			: \${type:=}
-			# Used to generate new section in CHANGELOG
+			: \${scope:=}
+			show_scope=
 			header_tpl=('%s\n\n' 'CHANGELOG')
 			release_tpl=('%s\n\n' "\${tag}")
 			unreleased_tpl=('%s\n\n' 'Unreleased')
 			type_tpl=('%s\n\n' "\${type}")
+			scope_tpl=('%s\n\n' "\${scope}")
 			commit_tpl=('- %s (%.7s)\n' "\${title}" "\${hash}")
 			${user_conf:-}
 			${repo_conf:-}
@@ -88,8 +90,9 @@ set_commit_infos() {
 				COMMIT_HASH[$i]="$commit_hash"
 				COMMIT_TITLE[$i]="$commit_title"
 				COMMIT_BODY[$i]="$commit_body"
-				COMMIT_SCOPE[$i]="$commit_scope"
+				COMMIT_SCOPE[$i]="${commit_scope:=no scope}"
 				COMMIT_TYPE_LIST["$commit_type"]="${COMMIT_TYPE_LIST[$commit_type]:-} $i"
+				COMMIT_SCOPE_LIST["$commit_scope"]="${COMMIT_SCOPE_LIST[${commit_scope}]:-} $i"
 				((i=i+1))
 			else
 				debug "WARNING : Commit type '${commit_type}' not in \$CONVENTIONAL_COMMIT_TO_SHOW"
@@ -103,6 +106,7 @@ set_commit_infos() {
 set_changelog_release() {
 	debug "Writing changelog.."
 	local tag="${GIT_ACTUAL_TAG}"
+	local show_scope
 	set_tpl_vars
 	if [[ -n "${tag:-}" ]];then
 		# shellcheck disable=SC2059,SC2154
@@ -122,22 +126,45 @@ set_changelog_release() {
 			set_tpl_vars
 			# shellcheck disable=SC2059,SC2154
 			printf -v output -- "${output}### ${type_tpl[0]}" "${type_tpl[@]:1}"
-			local i
-			for i in "${commit_list[@]}";do
-				local hash="${COMMIT_HASH[$i]}"
-				debug "commit : ${hash}"
-				local title="${COMMIT_TITLE[$i]}"
-				debug "commit message : ${title}"
-				set_tpl_vars
-				# shellcheck disable=SC2059,SC2154
-				printf -v output -- "${output}${commit_tpl[0]}" "${commit_tpl[@]:1}"
-			done
-			# shellcheck disable=SC2059
-			printf -v output -- "${output}\n"
+			if [ -n "${show_scope}" ];then
+				while IFS= read -r scope;do
+					set_tpl_vars
+					local scope_commits=()
+					for commit in "${commit_list[@]}";do
+						if [[ " ${COMMIT_SCOPE_LIST["$scope"]} " == *" ${commit} "* ]];then
+							scope_commits+=("$commit")
+						fi
+					done
+					debug "commits with scope : $scope" "${scope_commits[@]}"
+					if [ "${#scope_commits[@]}" -gt 0 ];then
+						# shellcheck disable=SC2059,SC2154
+						printf -v output -- "${output}#### ${scope_tpl[0]}" "${scope_tpl[@]:1}"
+						set_changelog_release_commits "${scope_commits[@]}"
+					fi
+				done < <(printf '%s\n' "${!COMMIT_SCOPE_LIST[@]}" | LC_ALL=C sort)
+			else
+				set_changelog_release_commits "${commit_list[@]}"
+			fi
 		else
 			debug "No commit found with type : ${type}"
 		fi
 	done
+}
+
+set_changelog_release_commits() {
+	commits=("$@")
+	local i
+	for i in "${commits[@]}";do
+		local hash="${COMMIT_HASH[$i]}"
+		debug "commit : ${hash}"
+		local title="${COMMIT_TITLE[$i]}"
+		debug "commit message : ${title}"
+		set_tpl_vars
+		# shellcheck disable=SC2059,SC2154
+		printf -v output -- "${output}${commit_tpl[0]}" "${commit_tpl[@]:1}"
+	done
+	# shellcheck disable=SC2059
+	printf -v output -- "${output}\n"
 }
 
 update_changelog() {
@@ -223,6 +250,7 @@ git-changelog() {
 	local COMMIT_BODY=()
 	local COMMIT_SCOPE=()
 	declare -A COMMIT_TYPE_LIST
+	declare -A COMMIT_SCOPE_LIST
 
 	set_git_infos
 	set_commit_infos
