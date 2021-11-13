@@ -52,6 +52,7 @@ In configuration, some variables are availables for use
 Available variables who could be changed are :
 
 - show_scope: Will show commits grouped by scope if set to non empty
+- show_body: Will show commits body under description
 - header_tpl: used to generate a HEADER section
 - release_tpl: used to generate release section when a tag exists
 - unreleased_tpl: used to generate unreleased section when no tag exists
@@ -65,6 +66,8 @@ Available variables who could be changed are :
 ```bash
 # Should we show scope section ?
 show_scope=
+# Should we show commit body ?
+show_body=
 
 # Templates
 header_tpl=('%s\n\n' 'CHANGELOG')

@@ -39,6 +39,7 @@ set_user_config() {
 			: \${type:=}
 			: \${scope:=}
 			show_scope=
+			show_body=
 			header_tpl=('%s\n\n' 'CHANGELOG')
 			release_tpl=('%s\n\n' "\${tag}")
 			unreleased_tpl=('%s\n\n' 'Unreleased')
@@ -107,6 +108,7 @@ set_changelog_release() {
 	debug "Writing changelog.."
 	local tag="${GIT_ACTUAL_TAG}"
 	local show_scope
+	local show_body
 	declare -A commit_type_traduction
 	declare -A commit_scope_traduction
 	set_tpl_vars
@@ -170,6 +172,10 @@ set_changelog_release_commits() {
 		set_tpl_vars
 		# shellcheck disable=SC2059,SC2154
 		printf -v output -- "${output}${commit_tpl[0]}" "${commit_tpl[@]:1}"
+		if [ -n "${show_body}" ] && [ -n "${COMMIT_BODY[$i]}" ];then
+			# shellcheck disable=SC2016,SC2001
+			printf -v output -- "${output}"'  ```\n%s\n  ```\n' "$(echo	"${COMMIT_BODY[$i]}" | sed 's/^/  /g;$d')"
+		fi
 	done
 	# shellcheck disable=SC2059
 	printf -v output -- "${output}\n"
