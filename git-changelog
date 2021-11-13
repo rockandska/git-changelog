@@ -66,6 +66,9 @@ set_commit_infos() {
 	local i=0
 	while IFS= read -r -d $'\0' commit_infos; do
 		eval "$commit_infos"
+		commit_subject="${commit_subject%$'\n'}"
+		commit_hash="${commit_hash%$'\n'}"
+		commit_body="${commit_body%$'\n'}"
 		if [[ "${commit_subject}" =~ $CONVENTIONAL_COMMIT_REGEX ]];then
 			debug "OK : conventional commit found in subject : '${commit_subject}' (${commit_hash::7})"
 			commit_type="${BASH_REMATCH[1]}"
@@ -174,7 +177,7 @@ set_changelog_release_commits() {
 		printf -v output -- "${output}${commit_tpl[0]}" "${commit_tpl[@]:1}"
 		if [ -n "${show_body}" ] && [ -n "${COMMIT_BODY[$i]}" ];then
 			# shellcheck disable=SC2016,SC2001
-			printf -v output -- "${output}"'  ```\n%s\n  ```\n' "$(echo	"${COMMIT_BODY[$i]}" | sed 's/^/  /g;$d')"
+			printf -v output -- "${output}"'  ```\n%s\n  ```\n' "$(echo	"${COMMIT_BODY[$i]}" | sed 's/^/  /g')"
 		fi
 	done
 	# shellcheck disable=SC2059
@@ -214,6 +217,11 @@ update_changelog() {
 		&& printf '\0'
 	)
 
+	if ((PRINT));then
+		printf '%s\n' "${changelog_cleaned[@]}"
+		return
+	fi
+
 	# old
 	while IFS= read -r line;do
 		changelog_cleaned+=( "$line" )
@@ -233,10 +241,78 @@ update_changelog() {
 
 	# shellcheck disable=SC1003
 	printf '%s\n' "${changelog_cleaned[@]}" > "${CHANGELOG_PATH}"
+
+	1>&2 echo "${CHANGELOG_PATH} updated !"
+}
+
+show_help() {
+	cat <<-EOF
+	git-changelog
+
+	Usage:
+
+	git-changelog [(-h|-?)] [-v] [(-n|--next-tag) <TAG>] [-p]
+
+	Options:
+	  -v, --verbose     Increase verbosity (could be repeat)
+	  -n, --next-tag    Set tag for release generation (env: CHANGELOG_TAG)
+	  -p, --print       Don't update CHANGELOG, just print section generated
+	  -h, -?            Show this help
+	EOF
+}
+
+parse_args() {
+while :; do
+	case ${1:-} in
+		-h|-\?)
+			show_help
+			exit
+			;;
+		-n|--next-tag)
+			if [ "$2" ]; then
+				CHANGELOG_TAG=$2
+				shift
+			else
+				echo 1>&2 'ERROR: "--next-tag" requires a non-empty option argument.'
+				exit 1
+			fi
+			;;
+		--next-tag=?*)
+			CHANGELOG_TAG=${1#*=}
+			;;
+		--next-tag=)
+			1>&2 'ERROR: "--next-tag" requires a non-empty option argument.'
+			exit 1
+			;;
+		-p|--print)
+			PRINT=1
+			;;
+		-v|--verbose)
+			DEBUG=$((DEBUG + 1))
+			if [[ "$DEBUG" -ge 2 ]];then
+				set -x
+			fi
+			;;
+		--)
+			shift
+			break
+			;;
+		-?*)
+			1>&2 printf 'ERROR: Unknown option : %s\n' "$1"
+			exit 1
+			;;
+		*)
+			break
+	esac
+
+	shift
+done
 }
 
 git-changelog() {
-	: "${DEBUG:=0}"
+	DEBUG=0
+	PRINT=0
+	parse_args "$@"
 
 	# Program related
 	local PROGRAM_NAME="git-changelog"
@@ -272,9 +348,10 @@ git-changelog() {
 	if [[ "${#COMMIT_HASH[@]}" -gt 0 ]];then
 		set_changelog_release
 		update_changelog
-		1>&2 echo "${CHANGELOG_PATH} updated !"
 	else
-		1>&2 echo "No changes made to ${CHANGELOG_PATH}"
+		if ! ((PRINT));then
+			1>&2 echo "No changes made to ${CHANGELOG_PATH}"
+		fi
 	fi
 }
 

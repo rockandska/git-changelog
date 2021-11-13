@@ -108,5 +108,4 @@ Use this configuration to change git-changelog behavior for a specific repo.
 ## TODO
 
 - write documentation
-- allow to only print generated CHANGELOG
 - allow to go in the past
