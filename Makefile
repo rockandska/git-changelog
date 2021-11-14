@@ -8,89 +8,45 @@ MKFILE_DIR := $(dir $(MKFILE_PATH))
 
 export PATH := $(MKFILE_DIR):$(MKFILE_DIR)/tmp/bin:$(PATH)
 
-DOCKER_REGISTRY ?=
-DOCKER_REGISTRY_USER ?= rockandska
-DOCKER_REGISTRY_PASSWORD ?=
-DOCKER_REGISTRY_NAMESPACE ?= rockandska/
-DOCKER_IMAGE_NAME := git-changelog
-DOCKER_IMAGE_FULL_NAME := $(DOCKER_REGISTRY)$(DOCKER_REGISTRY_NAMESPACE)$(DOCKER_IMAGE_NAME)
-
-GIT_TAG :=$(shell git tag --points-at 2> /dev/null | head -n1)
-LAST_VERSION := $(shell git for-each-ref --sort=-creatordate --format '%(refname)' refs/tags | sed 's/refs\/tags\///' | head -n1)
-NEXT_VERSION := $(shell docker run --rm -v $(MKFILE_DIR):/tmp --workdir /tmp ghcr.io/caarlos0/svu next --strip-prefix)
-
-SHELL_CHECK_VERSION := v0.7.0
-DOCKERHUB_DESCRIPTION_VERSION := 2.4.2
-
 ###############
 
 # invoking make V=1 will print everything
 $(V).SILENT:
 
-.PHONY: all
-all: changelog
-
 .PHONY: changelog
 changelog:
-	$(info ##### CHANGELOG generation #####)
+	printf '%s\n' "##### Update CHANGELOG (version: $${CHANGELOG_TAG:-Unreleased} ) #####"
 	git changelog
-	git add $(MKFILE_DIR)/CHANGELOG.md
-	git commit -m "Update CHANGELOG [skip ci]"
+	if ! git diff --exit-code CHANGELOG.md 2>&1 > /dev/null;then
+		printf '%s\n' "##### Commiting changes #####"
+		git add CHANGELOG.md
+		if [[ -n "$${CHANGELOG_TAG:-}" ]];then
+			git commit -m "Bump version to $${CHANGELOG_TAG} [skip ci]"
+			printf '%s\n' "##### Add tag '$${CHANGELOG_TAG}' #####"
+			git tag -m "$${CHANGELOG_TAG}" "$${CHANGELOG_TAG}"
+		else
+			git commit -m "Changelog update [skip ci]"
+		fi
+	else
+		1>&2 printf '%s\n' "No changes made to CHANGELOG.md"
+	fi
 
 .PHONY: release
+release: CURRENT_GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD)
+release: LAST_VERSION = $(shell git for-each-ref --merged $(CURRENT_GIT_BRANCH) --sort=-creatordate --format '%(refname)' refs/tags | sed 's/refs\/tags\///' | head -n1)
+release: NEXT_VERSION = $(shell docker run --rm -v $(MKFILE_DIR):/tmp --workdir /tmp ghcr.io/caarlos0/svu next --strip-prefix)
 release:
-	$(info ##### Release #####)
-	[[ "$(LAST_VERSION)" == "$(NEXT_VERSION)" ]] && { 1>&2 echo "Error: Next version is the same as the previous one !"; exit 1; }
-	[[ -z "$(NEXT_VERSION)" ]] && { 1>&2 echo "Error: Next version is empty !"; exit 1; }
-	$(info ##### version : '$(NEXT_VERSION)' #####)
-	CHANGELOG_TAG="$(NEXT_VERSION)" $(MAKE) --no-print-directory changelog
-	git commit --amend --no-edit -m "Bump version to $(NEXT_VERSION) [skip ci]"
-	git tag -m "$(NEXT_VERSION)" "$(NEXT_VERSION)"
-
-.SECONDARY: docker-login
-docker-login:
-	$(info ##### Try to logging to docker registry $(DOCKER_REGISTRY) #####)
-	docker login $(DOCKER_REGISTRY) < /dev/null 2> /dev/null	|| {
-			[[ $$'$(DOCKER_REGISTRY_PASSWORD)' == "" ]] && {
-					1>&2 echo "Error: DOCKER_REGISTRY_PASSWORD not set";
-					exit 1;
-			} || echo $$'$(DOCKER_REGISTRY_PASSWORD)' | docker login --username $(DOCKER_REGISTRY_USER) --password-stdin $(DOCKER_REGISTRY);
-	}
-
-.PHONY: docker-build
-docker-build:
-	$(info ##### Building Docker image : '$(DOCKER_IMAGE_NAME):latest' #####)
-	docker build --quiet -f $(MKFILE_DIR)/Dockerfile $(MKFILE_DIR) -t $(DOCKER_IMAGE_NAME):latest $(if $(GIT_TAG),-t $(DOCKER_IMAGE_NAME):$(GIT_TAG))
-
-.PHONY: docker-publish
-docker-publish: docker-build docker-login
-ifneq ($(GIT_TAG),)
-	$(info ##### Publishing '$(DOCKER_IMAGE_NAME):$(GIT_TAG)' on registry $(DOCKER_REGISTRY) #####)
-	docker image tag $(DOCKER_IMAGE_NAME):latest $(DOCKER_IMAGE_FULL_NAME):$(GIT_TAG)
-	docker push $(DOCKER_IMAGE_FULL_NAME):$(GIT_TAG)
-endif
-	$(info ##### Publishing '$(DOCKER_IMAGE_NAME):latest' on registry $(DOCKER_REGISTRY) #####)
-	docker image tag $(DOCKER_IMAGE_NAME):latest $(DOCKER_IMAGE_FULL_NAME):latest
-	docker push $(DOCKER_IMAGE_FULL_NAME):latest
-
-docker-sync-readme: docker-login
-	$(info ##### Syncing README to DockerHub #####)
-ifeq ($(DOCKER_REGISTRY_PASSWORD),)
-	$(info ##### Try to retrieve credentials from ~/.docker/config.json #####)
-	DOCKER_CONFIG_CREDS=$$(cat ~/.docker/config.json | docker run -i --rm itchyny/gojq:0.12.5 -r '.auths | with_entries( select(.key|contains("$(if $(DOCKER_REGISTRY),$(DOCKER_REGISTRY),docker.io)")))[].auth' | base64 -d)
-	IFS=: read DOCKER_REGISTRY_USER DOCKER_REGISTRY_PASSWORD <<< "$${DOCKER_CONFIG_CREDS}"
-endif
-	docker run -v $(MKFILE_DIR):/workspace \
-	-e DOCKERHUB_USERNAME="$(if $(DOCKER_REGISTRY_USER),$(DOCKER_REGISTRY_USER),$${DOCKER_REGISTRY_USER})" \
-	-e DOCKERHUB_PASSWORD="$(if $(DOCKER_REGISTRY_PASSWORD),$(DOCKER_REGISTRY_PASSWORD),$${DOCKER_REGISTRY_PASSWORD})" \
-	-e DOCKERHUB_REPOSITORY="$(DOCKER_IMAGE_FULL_NAME)" \
-	-e README_FILEPATH='/workspace/README.md' \
-	-e SHORT_DESCRIPTION='Custom git command to generate/update CHANGELOG from conventional commits' \
-	peterevans/dockerhub-description:$(DOCKERHUB_DESCRIPTION_VERSION)
+	printf '%s\n' "##### Release (LAST_VERSION='$${LAST_VERSION:=$(LAST_VERSION)}' / NEXT_VERSION='$${NEXT_VERSION:=$(NEXT_VERSION)}' ) #####"
+	[[ "$${LAST_VERSION}" == "$${NEXT_VERSION}" ]] \
+		&& { NEXT_VERSION=''; printf '%s\n' 'Version: Unreleased'; } \
+		|| printf '%s\n' "Version: $${NEXT_VERSION}"
+	CHANGELOG_TAG="$${NEXT_VERSION}" $(MAKE) --no-print-directory changelog
 
 #####
 # Includes
 #####
 
 dir	:= test
+include		$(dir)/Rules.mk
+dir	:= Docker
 include		$(dir)/Rules.mk

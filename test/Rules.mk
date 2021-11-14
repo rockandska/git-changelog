@@ -8,9 +8,12 @@ d := $(dir)
 #####
 # Vars
 #####
+
 TEST_DIR := $(d)
 TEST_ABS_DIR := $(MKFILE_DIR)$(d)
 TEST_TARGETS := shellcheck test-bats
+
+SHELL_CHECK_VERSION := v0.7.0
 
 #####
 # targets
