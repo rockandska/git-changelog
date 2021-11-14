@@ -8,13 +8,16 @@ debug(){
 }
 
 set_git_infos() {
+	local GIT_ACTUAL_BRANCH
+	GIT_ACTUAL_BRANCH="$(git rev-parse --abbrev-ref HEAD 2> /dev/null || true)"
+	debug "Actual branch:" "$GIT_ACTUAL_BRANCH"
 	# Git commits
 	local line
 	while IFS='' read -r line; do GIT_ACTUAL_TAGS+=("$line"); done < <(git tag --points-at 2> /dev/null || true)
 	debug "Actuals tags :" "${GIT_ACTUAL_TAGS[@]:-}"
 	GIT_ACTUAL_TAG="${CHANGELOG_TAG:-${GIT_ACTUAL_TAGS[0]:-}}"
 	debug "Actual tag :" "${GIT_ACTUAL_TAG:-}"
-	while IFS='' read -r line; do GIT_PREVIOUS_TAGS+=("$line"); done < <(git for-each-ref --no-contains=HEAD --sort=-creatordate --format '%(refname)' refs/tags 2> /dev/null | sed 's/refs\/tags\///')
+	while IFS='' read -r line; do GIT_PREVIOUS_TAGS+=("$line"); done < <(git for-each-ref --merge "${GIT_ACTUAL_BRANCH}" --no-contains=HEAD --sort=-creatordate --format '%(refname)' refs/tags 2> /dev/null | sed 's/refs\/tags\///')
 	debug "Previous tags:" "${GIT_PREVIOUS_TAGS[@]}"
 	GIT_PREVIOUS_TAG="${GIT_PREVIOUS_TAGS[0]:-}"
 	debug "Previous tag:" "${GIT_PREVIOUS_TAG}"
