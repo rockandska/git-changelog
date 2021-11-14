@@ -5,3 +5,5 @@ RUN apk --update add bash && \
     rm /var/cache/apk/*
 
 COPY git-changelog /usr/bin
+
+ENTRYPOINT [ "git", "changelog" ]
