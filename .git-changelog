@@ -1,0 +1,7 @@
+local repo_url='https://github.com/rockandska/git-changelog'
+local commit_url="${repo_url}/commit/${hash}"
+local release_url="${repo_url}/tree/${tag}"
+local unreleased_url="${repo_url}/tree/master"
+release_tpl=('[%s](%s)\n\n' "${tag}" "${release_url}")
+unreleased_tpl=('[%s](%s)\n\n' 'Unreleased' "${unreleased_url}")
+commit_tpl=('- %s ([%.7s](%s))\n' "${title:-}" "${hash}" "${commit_url}")
