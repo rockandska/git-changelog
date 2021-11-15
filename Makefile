@@ -15,7 +15,7 @@ $(V).SILENT:
 
 .PHONY: changelog
 changelog:
-	printf '%s\n' "##### Update CHANGELOG (version: $${CHANGELOG_TAG:-Unreleased} ) #####"
+	printf '%s\n' "##### Update CHANGELOG (version: '$${CHANGELOG_TAG:-}' ) #####"
 	git changelog
 	if ! git diff --exit-code CHANGELOG.md 2>&1 > /dev/null;then
 		printf '%s\n' "##### Commiting changes #####"
@@ -27,8 +27,6 @@ changelog:
 		else
 			git commit -m "Changelog update [skip ci]"
 		fi
-	else
-		1>&2 printf '%s\n' "No changes made to CHANGELOG.md"
 	fi
 
 .PHONY: release
@@ -38,7 +36,7 @@ release: NEXT_VERSION = $(shell docker run --rm -v $(MKFILE_DIR):/tmp --workdir 
 release:
 	printf '%s\n' "##### Release (LAST_VERSION='$${LAST_VERSION:=$(LAST_VERSION)}' / NEXT_VERSION='$${NEXT_VERSION:=$(NEXT_VERSION)}' ) #####"
 	[[ "$${LAST_VERSION}" == "$${NEXT_VERSION}" ]] \
-		&& { NEXT_VERSION=''; printf '%s\n' 'Version: Unreleased'; } \
+		&& { NEXT_VERSION=''; printf '%s\n' "Version: ''"; } \
 		|| printf '%s\n' "Version: $${NEXT_VERSION}"
 	CHANGELOG_TAG="$${NEXT_VERSION}" $(MAKE) --no-print-directory changelog
 

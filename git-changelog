@@ -242,10 +242,13 @@ update_changelog() {
 			&& printf '\0'
 	)
 
-	# shellcheck disable=SC1003
-	printf '%s\n' "${changelog_cleaned[@]}" > "${CHANGELOG_PATH}"
+	if ! diff <(printf '%s\n' "${changelog_cleaned[@]}") "${CHANGELOG_PATH}" > /dev/null 2>&1;then
+		printf '%s\n' "${changelog_cleaned[@]}" > "${CHANGELOG_PATH}"
+		1>&2 echo "${CHANGELOG_PATH} updated !"
+	else
+		1>&2 echo "${CHANGELOG_PATH} is already up to date !"
+	fi
 
-	1>&2 echo "${CHANGELOG_PATH} updated !"
 }
 
 show_help() {
