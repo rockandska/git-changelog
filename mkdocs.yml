@@ -1,0 +1,9 @@
+site_name: git-changelog
+site_url: https://git-changelog-bash.readthedocs.io
+site_description: Custom git command to generate CHANGELOG from conventional commits
+repo_url: https://github.com/rockandska/git-changelog/
+theme: readthedocs
+nav:
+  - Index: 'index.md'
+  - Configuration: 'config.md'
+  - Changelog: 'changelog.md'
