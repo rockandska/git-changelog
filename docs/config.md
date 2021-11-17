@@ -1,6 +1,22 @@
 # Configuration
 
+## Custom configuration
+
+Configuration could be changed at the user level or at the repo level
+
 Configuration is done by providing file(s) with BASH variables declarations.
+
+### User configuration
+
+If exists, `~/.config/git-changelog/config` will be loaded.
+
+Use this configuration to change git-changelog behavior for all git-changelog generated
+
+### Repo configuration
+
+If a file named `.git-changelog` is present at the root of your repo, this file will be loaded.
+
+Use this configuration to change git-changelog behavior for a specific repo.
 
 ## Git variables
 
@@ -18,6 +34,19 @@ Variables available for use in templates variables.
 - **`hash`**
     - Type: string
     - current commit hash
+
+## Conventional commits variables
+
+Available variables who could be changed are :
+
+- **`conventional_commit_regex`**
+    - Type: String
+    - Used to detect conventionnal commits
+    - Default! `conventional_commit_regex="^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\(([[:alnum:]._-]+)\))?(!)?: ([[:print:]]*)"`
+- **`conventional_commit_to_show`**
+    - Type: Array
+    - Used to decide which commits type should be shown in CHANGELOG
+    - Default: `conventional_commit_to_show=("BREAKING_CHANGES" "feat" "fix")`
 
 ## Templating variables
 
@@ -63,22 +92,6 @@ Available variables who could be changed are :
     - Type: Associative Array
     - Used to convert scope to more friendly names
     - Default: `commit_scope_traduction=()`
-
-## Custom configuration
-
-Configuration could be changed at the user level or at the repo level
-
-### User configuration
-
-If exists, `~/.config/git-changelog/config` will be loaded.
-
-Use this configuration to change git-changelog behavior for all git-changelog generated
-
-### Repo configuration
-
-If a file named `.git-changelog` is present at the root of your repo, this file will be loaded.
-
-Use this configuration to change git-changelog behavior for a specific repo.
 
 ## Examples
 

@@ -55,6 +55,8 @@ set_user_config() {
 			local commit_tpl=('- %s (%.7s)\n' "\${title}" "\${hash}")
 			declare -A commit_type_traduction
 			declare -A commit_scope_traduction
+			local conventional_commit_regex="^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\(([[:alnum:]._-]+)\))?(!)?: ([[:print:]]*)"
+			local conventional_commit_to_show=("BREAKING_CHANGES" "feat" "fix")
 			${user_conf:-}
 			${repo_conf:-}
 			eval \$(declare -p "\$var2get" 2> /dev/null | sed "s/declare .. \$var2get=/\$var2return="/)
@@ -73,13 +75,17 @@ set_commit_infos() {
 	local commit_breaking
 	local commit_scope
 	local commit_title
+	local _conventional_commit_regex
+	get_var conventional_commit_regex _conventional_commit_regex
+	local _conventional_commit_to_show
+	get_var conventional_commit_to_show _conventional_commit_to_show
 	local i=0
 	while IFS= read -r -d $'\0' commit_infos; do
 		eval "$commit_infos"
 		commit_subject="${commit_subject%$'\n'}"
 		commit_hash="${commit_hash%$'\n'}"
 		commit_body="${commit_body%$'\n'}"
-		if [[ "${commit_subject}" =~ $CONVENTIONAL_COMMIT_REGEX ]];then
+		if [[ "${commit_subject}" =~ ${_conventional_commit_regex} ]];then
 			debug "OK : conventional commit found in subject : '${commit_subject}' (${commit_hash::7})"
 			commit_type="${BASH_REMATCH[1]}"
 			commit_breaking="${BASH_REMATCH[4]}"
@@ -99,8 +105,8 @@ set_commit_infos() {
 				done <<<"${commit_body}"
 			fi
 			# shellcheck disable=SC2076
-			if [[ " ${CONVENTIONAL_COMMIT_TO_SHOW[*]} " == *" ${commit_type} "* ]]; then
-				debug "OK : Commit type '$commit_type' is in \$CONVENTIONAL_COMMIT_TO_SHOW"
+			if [[ " ${_conventional_commit_to_show[*]} " == *" ${commit_type} "* ]]; then
+				debug "OK : Commit type '$commit_type' is in \$conventional_commit_to_show"
 				COMMIT_HASH[$i]="$commit_hash"
 				COMMIT_TITLE[$i]="$commit_title"
 				COMMIT_BODY[$i]="$commit_body"
@@ -132,6 +138,8 @@ set_changelog_release() {
 	get_var commit_type_traduction _commit_type_traduction
 	declare -A _commit_scope_traduction
 	get_var commit_scope_traduction _commit_scope_traduction
+	local _conventional_commit_to_show
+	get_var conventional_commit_to_show _conventional_commit_to_show
 	if [[ -n "${tag:-}" ]];then
 		# shellcheck disable=SC2059,SC2154
 		printf -v output -- "${output:-}## ${_release_tpl[0]}" "${_release_tpl[@]:1}"
@@ -141,7 +149,7 @@ set_changelog_release() {
 	fi
 
 	local type
-	for type in "${CONVENTIONAL_COMMIT_TO_SHOW[@]}";do
+	for type in "${_conventional_commit_to_show[@]}";do
 		debug "Processing commit type: $type"
 		if [[ -n "${COMMIT_TYPE_LIST[$type]:-}" ]];then
 			local commit_list
@@ -358,10 +366,6 @@ git-changelog() {
 	local CHANGELOG_PATH
 	CHANGELOG_PATH="${GIT_TOP_LEVEL}/CHANGELOG.md"
 
-	# Conventional commits
-	local CONVENTIONAL_COMMIT_REGEX="^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\(([[:alnum:]._-]+)\))?(!)?: ([[:print:]]*)"
-	local CONVENTIONAL_COMMIT_TO_SHOW=("BREAKING_CHANGES" "feat" "fix" "revert" "test")
-
 	# Git infos
 	local GIT_ACTUAL_TAGS
 	local GIT_ACTUAL_TAG
@@ -377,8 +381,8 @@ git-changelog() {
 	declare -A COMMIT_SCOPE_LIST
 
 	set_git_infos
-	set_commit_infos
 	set_user_config
+	set_commit_infos
 	if [[ "${#COMMIT_HASH[@]}" -gt 0 ]];then
 		set_changelog_release
 		update_changelog
