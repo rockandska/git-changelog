@@ -48,3 +48,5 @@ dir	:= test
 include		$(dir)/Rules.mk
 dir	:= Docker
 include		$(dir)/Rules.mk
+dir	:= docs
+include		$(dir)/Rules.mk
