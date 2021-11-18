@@ -37,8 +37,12 @@ set_user_config() {
 	source /dev/stdin <<-EOF
 		get_var() {
 			local var2get="\${1:-}"
-			local var2return="\${2:-}"
+			eval \$(display_var \$var2get)
+		}
 
+		display_var() {
+			local var2get="\${1:-}"
+			
 			local -r hash="\${hash:-}"
 			local -r tag="\${tag:-}"
 			local -r title="\${title:-}"
@@ -59,7 +63,7 @@ set_user_config() {
 			local conventional_commit_to_show=("BREAKING_CHANGES" "feat" "fix")
 			${user_conf:-}
 			${repo_conf:-}
-			eval \$(declare -p "\$var2get" 2> /dev/null | sed "s/declare .. \$var2get=/\$var2return="/)
+			sed 's/declare .. //' <(grep "=" <(declare -p "\$var2get" 2> /dev/null))
 		}
 	EOF
 }
@@ -75,17 +79,17 @@ set_commit_infos() {
 	local commit_breaking
 	local commit_scope
 	local commit_title
-	local _conventional_commit_regex
-	get_var conventional_commit_regex _conventional_commit_regex
-	local _conventional_commit_to_show
-	get_var conventional_commit_to_show _conventional_commit_to_show
+	local conventional_commit_regex
+	get_var conventional_commit_regex
+	local conventional_commit_to_show
+	get_var conventional_commit_to_show
 	local i=0
 	while IFS= read -r -d $'\0' commit_infos; do
 		eval "$commit_infos"
 		commit_subject="${commit_subject%$'\n'}"
 		commit_hash="${commit_hash%$'\n'}"
 		commit_body="${commit_body%$'\n'}"
-		if [[ "${commit_subject}" =~ ${_conventional_commit_regex} ]];then
+		if [[ "${commit_subject}" =~ ${conventional_commit_regex} ]];then
 			debug "OK : conventional commit found in subject : '${commit_subject}' (${commit_hash::7})"
 			commit_type="${BASH_REMATCH[1]}"
 			commit_breaking="${BASH_REMATCH[4]}"
@@ -105,7 +109,7 @@ set_commit_infos() {
 				done <<<"${commit_body}"
 			fi
 			# shellcheck disable=SC2076
-			if [[ " ${_conventional_commit_to_show[*]} " == *" ${commit_type} "* ]]; then
+			if [[ " ${conventional_commit_to_show[*]} " == *" ${commit_type} "* ]]; then
 				debug "OK : Commit type '$commit_type' is in \$conventional_commit_to_show"
 				COMMIT_HASH[$i]="$commit_hash"
 				COMMIT_TITLE[$i]="$commit_title"
@@ -126,42 +130,42 @@ set_commit_infos() {
 set_changelog_release() {
 	debug "Writing changelog.."
 	local tag="${GIT_ACTUAL_TAG}"
-	local _show_scope
-	get_var show_scope _show_scope
-	local _show_body
-	get_var show_body _show_body
-	local _unreleased_tpl
-	get_var unreleased_tpl _unreleased_tpl
-	local _release_tpl
-	get_var release_tpl _release_tpl
-	declare -A _commit_type_traduction
-	get_var commit_type_traduction _commit_type_traduction
-	declare -A _commit_scope_traduction
-	get_var commit_scope_traduction _commit_scope_traduction
-	local _conventional_commit_to_show
-	get_var conventional_commit_to_show _conventional_commit_to_show
+	local show_scope
+	get_var show_scope
+	local show_body
+	get_var show_body
+	local unreleased_tpl
+	get_var unreleased_tpl
+	local release_tpl
+	get_var release_tpl
+	declare -A commit_type_traduction
+	get_var commit_type_traduction
+	declare -A commit_scope_traduction
+	get_var commit_scope_traduction
+	local conventional_commit_to_show
+	get_var conventional_commit_to_show
 	if [[ -n "${tag:-}" ]];then
 		# shellcheck disable=SC2059,SC2154
-		printf -v output -- "${output:-}## ${_release_tpl[0]}" "${_release_tpl[@]:1}"
+		printf -v output -- "${output:-}## ${release_tpl[0]}" "${release_tpl[@]:1}"
 	else
 		# shellcheck disable=SC2059,SC2154
-		printf -v output -- "${output:-}## ${_unreleased_tpl[0]}" "${_unreleased_tpl[@]:1}"
+		printf -v output -- "${output:-}## ${unreleased_tpl[0]}" "${unreleased_tpl[@]:1}"
 	fi
 
 	local type
-	for type in "${_conventional_commit_to_show[@]}";do
+	for type in "${conventional_commit_to_show[@]}";do
 		debug "Processing commit type: $type"
 		if [[ -n "${COMMIT_TYPE_LIST[$type]:-}" ]];then
 			local commit_list
 			IFS=" " read -r -a commit_list <<< "${COMMIT_TYPE_LIST[$type]}"
 			debug "commits with type : $type" "${commit_list[@]}"
 			# traduction
-			type="${_commit_type_traduction["$type"]:-$type}"
-			local _type_tpl
-			get_var type_tpl _type_tpl
+			type="${commit_type_traduction["$type"]:-$type}"
+			local type_tpl
+			get_var type_tpl
 			# shellcheck disable=SC2059,SC2154
-			printf -v output -- "${output}### ${_type_tpl[0]}" "${_type_tpl[@]:1}"
-			if [ -n "${_show_scope}" ];then
+			printf -v output -- "${output}### ${type_tpl[0]}" "${type_tpl[@]:1}"
+			if [ -n "${show_scope}" ];then
 				while IFS= read -r scope;do
 					local scope_commits=()
 					for commit in "${commit_list[@]}";do
@@ -172,10 +176,10 @@ set_changelog_release() {
 					debug "commits with scope : $scope" "${scope_commits[@]}"
 					if [ "${#scope_commits[@]}" -gt 0 ];then
 						# traduction
-						scope="${_commit_scope_traduction["$scope"]:-$scope}"
-						get_var scope_tpl _scope_tpl
+						scope="${commit_scope_traduction["$scope"]:-$scope}"
+						get_var scope_tpl
 						# shellcheck disable=SC2059,SC2154
-						printf -v output -- "${output}#### ${_scope_tpl[0]}" "${_scope_tpl[@]:1}"
+						printf -v output -- "${output}#### ${scope_tpl[0]}" "${scope_tpl[@]:1}"
 						set_changelog_release_commits "${scope_commits[@]}"
 					fi
 				done < <(printf '%s\n' "${!COMMIT_SCOPE_LIST[@]}" | LC_ALL=C sort)
@@ -190,22 +194,22 @@ set_changelog_release() {
 
 set_changelog_release_commits() {
 	commits=("$@")
-	declare -A _commit_scope_traduction
-	get_var commit_scope_traduction _commit_scope_traduction
-	local _show_body
-	get_var show_body _show_body
+	declare -A commit_scope_traduction
+	get_var commit_scope_traduction
+	local show_body
+	get_var show_body show_body
 	local i
 	for i in "${commits[@]}";do
 		local hash="${COMMIT_HASH[$i]}"
 		debug "commit : ${hash}"
 		local title="${COMMIT_TITLE[$i]}"
 		debug "commit title : ${title}"
-		local scope="${_commit_scope_traduction["${COMMIT_SCOPE[$i]}"]:-${COMMIT_SCOPE[$i]}}"
+		local scope="${commit_scope_traduction["${COMMIT_SCOPE[$i]}"]:-${COMMIT_SCOPE[$i]}}"
 		debug "commit scope : ${scope}"
-		get_var commit_tpl _commit_tpl
+		get_var commit_tpl
 		# shellcheck disable=SC2059,SC2154
-		printf -v output -- "${output}${_commit_tpl[0]}" "${_commit_tpl[@]:1}"
-		if [ -n "${_show_body}" ] && [ -n "${COMMIT_BODY[$i]}" ];then
+		printf -v output -- "${output}${commit_tpl[0]}" "${commit_tpl[@]:1}"
+		if [ -n "${show_body}" ] && [ -n "${COMMIT_BODY[$i]}" ];then
 			# shellcheck disable=SC2016,SC2001
 			printf -v output -- "${output}"'  ```\n%s\n  ```\n' "$(echo	"${COMMIT_BODY[$i]}" | sed 's/^/  /g')"
 		fi
@@ -221,20 +225,20 @@ update_changelog() {
 	local escaped_unreleased
 	local changelog_cleaned
 
-	local _header_tpl
-	get_var header_tpl _header_tpl
+	local header_tpl
+	get_var header_tpl
 	# shellcheck disable=SC2059
-	escaped_header=$(printf -- "${_header_tpl[0]:-}" "${_header_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
+	escaped_header=$(printf -- "${header_tpl[0]:-}" "${header_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
 
-	local _release_tpl
-	get_var release_tpl _release_tpl
+	local release_tpl
+	get_var release_tpl
 	# shellcheck disable=SC2059
-	escaped_release=$(printf -- "${_release_tpl[0]:-}" "${_release_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
+	escaped_release=$(printf -- "${release_tpl[0]:-}" "${release_tpl[@]:1}" | sed	's/[.[\/\*^$]/\\&/g')
 
-	local _unreleased_tpl
-	get_var unreleased_tpl _unreleased_tpl
+	local unreleased_tpl
+	get_var unreleased_tpl
 	# shellcheck disable=SC2059
-	escaped_unreleased=$(printf -- "${_unreleased_tpl[0]:-}" "${_unreleased_tpl[@]:1}" |	sed	's/[.[\/\*^$]/\\&/g')
+	escaped_unreleased=$(printf -- "${unreleased_tpl[0]:-}" "${unreleased_tpl[@]:1}" |	sed	's/[.[\/\*^$]/\\&/g')
 
 	touch "${CHANGELOG_PATH}"
 
@@ -244,7 +248,7 @@ update_changelog() {
 		changelog_cleaned+=( "$line" )
 	done < <(
 		# shellcheck disable=SC2059
-		printf -- "# ${_header_tpl[0]}" "${_header_tpl[@]:1}" \
+		printf -- "# ${header_tpl[0]}" "${header_tpl[@]:1}" \
 		&& printf '\0'
 	)
 
