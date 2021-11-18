@@ -127,3 +127,65 @@ EOF
 EOF
 )
 }
+
+@test "redo an unreleased CHANGELOG should not change" {
+  git init
+  git commit --allow-empty -m"fix: add fix"
+  run git-changelog
+  [ "$output" == "${BATS_TEST_TMPDIR}/CHANGELOG.md updated !" ]
+  git_commit=$(git rev-parse --short HEAD)
+  diff "${BATS_TEST_TMPDIR}/CHANGELOG.md" <(cat <<EOF
+# CHANGELOG
+
+## Unreleased
+
+### fix
+
+- add fix (${git_commit})
+
+EOF
+)
+  run git-changelog
+  diff "${BATS_TEST_TMPDIR}/CHANGELOG.md" <(cat <<EOF
+# CHANGELOG
+
+## Unreleased
+
+### fix
+
+- add fix (${git_commit})
+
+EOF
+)
+}
+
+@test "redo a release CHANGELOG should not change" {
+  git init
+  git commit --allow-empty -m"fix: add fix"
+  run git-changelog -n 0.0.1
+  [ "$output" == "${BATS_TEST_TMPDIR}/CHANGELOG.md updated !" ]
+  git_commit=$(git rev-parse --short HEAD)
+  diff "${BATS_TEST_TMPDIR}/CHANGELOG.md" <(cat <<EOF
+# CHANGELOG
+
+## 0.0.1
+
+### fix
+
+- add fix (${git_commit})
+
+EOF
+)
+  run git-changelog -n 0.0.1
+  diff "${BATS_TEST_TMPDIR}/CHANGELOG.md" <(cat <<EOF
+# CHANGELOG
+
+## 0.0.1
+
+### fix
+
+- add fix (${git_commit})
+
+EOF
+)
+}
