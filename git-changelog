@@ -219,6 +219,7 @@ set_changelog_release_commits() {
 }
 
 update_changelog() {
+	local tag="${GIT_ACTUAL_TAG}"
 	# Used with sed to delete old section in CHANGELOG
 	local escaped_header
 	local escaped_release
