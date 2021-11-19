@@ -8,5 +8,6 @@ setup_file() {
   if ! git config user.name &> /dev/null;then
     git config --global user.name test
     git config --global user.email "test@test.com"
+    git config --global init.defaultBranch master
   fi
 }
