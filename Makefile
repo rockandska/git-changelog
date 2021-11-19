@@ -2,16 +2,37 @@
 .DELETE_ON_ERROR:
 SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c $(if $(V),-x)
+_SPACE = $(eval) $(eval)
+_COMMA := ,
 
 MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
-MKFILE_DIR := $(dir $(MKFILE_PATH))
+MKFILE_DIR := $(realpath $(dir $(MKFILE_PATH)))
 
 export PATH := $(MKFILE_DIR):$(MKFILE_DIR)/tmp/bin:$(PATH)
 
-###############
+.PHONY: .FORCE
+.FORCE:
 
 # invoking make V=1 will print everything
 $(V).SILENT:
+
+dir	:= test
+include		$(dir)/Rules.mk
+
+.PHONY: test
+test: $(TEST_TARGETS)
+
+dir	:= Docker
+include		$(dir)/Rules.mk
+
+.PHONY: docker
+docker: $(DOCKER_TARGETS)
+
+dir	:= docs
+include		$(dir)/Rules.mk
+
+.PHONY: docs
+docs:	$(DOCS_TARGETS)
 
 .PHONY: changelog
 changelog:
@@ -40,13 +61,6 @@ release:
 		|| printf '%s\n' "Version: $${NEXT_VERSION}"
 	CHANGELOG_TAG="$${NEXT_VERSION}" $(MAKE) --no-print-directory changelog
 
-#####
-# Includes
-#####
-
-dir	:= test
-include		$(dir)/Rules.mk
-dir	:= Docker
-include		$(dir)/Rules.mk
-dir	:= docs
-include		$(dir)/Rules.mk
+$(MKFILE_DIR)/.github/workflows/pull_request.yml: .FORCE
+	printf '%s\n' '### Updating GHA pull_request workflow ###'
+	docker run --rm -v "$(MKFILE_DIR):$(MKFILE_DIR)" mikefarah/yq:4.9.6 -i eval '.jobs.Tests.strategy.matrix.target = [ "$(subst $(_SPACE),"$(_SPACE)$(_COMMA)$(_SPACE)",$(strip $(TEST_TARGETS)))" ]' $@

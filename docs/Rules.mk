@@ -11,8 +11,8 @@ d := $(dir)
 #####
 
 DOCS_DIR := $(d)
-DOCS_ABS_DIR := $(MKFILE_DIR)$(d)
-DOCS_TARGETS := docker-build
+DOCS_ABS_DIR := $(MKFILE_DIR)/$(d)
+DOCS_TARGETS := docs-serve
 
 MKDOCS_DOCKER_VERSION := 1.1.2
 

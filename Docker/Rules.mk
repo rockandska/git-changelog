@@ -10,7 +10,7 @@ d := $(dir)
 #####
 
 DOCKER_DIR := $(d)
-DOCKER_ABS_DIR := $(MKFILE_DIR)$(d)
+DOCKER_ABS_DIR := $(MKFILE_DIR)/$(d)
 DOCKER_TARGETS := docker-build
 
 DOCKER_REGISTRY ?=
@@ -25,9 +25,6 @@ DOCKERHUB_DESCRIPTION_VERSION := 2.4.2
 #####
 # Targets
 #####
-
-.PHONY: docker
-docker: $(DOCKER_TARGETS)
 
 .SECONDARY: docker-login
 docker-login:
