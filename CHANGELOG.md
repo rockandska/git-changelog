@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [0.2.1](https://github.com/rockandska/git-changelog/tree/0.2.1)
+
+### fix
+
+- extra line is missing in some commits (#3) ([8f92f76](https://github.com/rockandska/git-changelog/commit/8f92f76b47885382ba171be5c810ea90a785714d))
+
 ## [0.2.0](https://github.com/rockandska/git-changelog/tree/0.2.0)
 
 ### feat
