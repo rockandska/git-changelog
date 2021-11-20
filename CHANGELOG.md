@@ -1,5 +1,16 @@
 # CHANGELOG
 
+## [0.2.0](https://github.com/rockandska/git-changelog/tree/0.2.0)
+
+### feat
+
+- let users interact with conventional commits regex / sections to show ([bd7a5b9](https://github.com/rockandska/git-changelog/commit/bd7a5b9960aabdb8864dce7933e9a3abe159d05f))
+
+### fix
+
+- changelog updated when launched twice with tag ([9637e06](https://github.com/rockandska/git-changelog/commit/9637e06bf9784b82885a386b08bc385321333262))
+- make config variables local ([525fddf](https://github.com/rockandska/git-changelog/commit/525fddfb937cc37f3f7891e3867909c910f4a44b))
+
 ## [0.1.0](https://github.com/rockandska/git-changelog/tree/0.1.0)
 
 ### feat
