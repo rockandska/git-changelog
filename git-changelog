@@ -89,6 +89,7 @@ set_commit_infos() {
 		commit_subject="${commit_subject%$'\n'}"
 		commit_hash="${commit_hash%$'\n'}"
 		commit_body="${commit_body%$'\n'}"
+		commit_body="${commit_body%$'\n'}"
 		if [[ "${commit_subject}" =~ ${conventional_commit_regex} ]];then
 			debug "OK : conventional commit found in subject : '${commit_subject}' (${commit_hash::7})"
 			commit_type="${BASH_REMATCH[1]}"
@@ -124,7 +125,7 @@ set_commit_infos() {
 		else
 			debug "WARNING : not a conventional commit with subject	'${commit_subject}' (${commit_hash::7})"
 		fi
-	done < <(git log -z	--pretty="IFS='' read -d '' -r commit_hash <<EOF ||	true%n%H%nEOF%nIFS='' read -d '' -r commit_subject <<EOF ||	true%n%s%nEOF%nIFS='' read -d	'' -r commit_body <<EOF || true%n%bEOF"	${GIT_PREVIOUS_TAG:+${GIT_PREVIOUS_TAG}..HEAD} 2>/dev/null)
+	done < <(git log -z	--pretty="IFS='' read -d '' -r commit_hash <<EOF ||	true%n%H%nEOF%nIFS='' read -d '' -r commit_subject <<EOF ||	true%n%s%nEOF%nIFS='' read -d	'' -r commit_body <<EOF || true%n%b%nEOF"	${GIT_PREVIOUS_TAG:+${GIT_PREVIOUS_TAG}..HEAD} 2>/dev/null)
 }
 
 set_changelog_release() {
